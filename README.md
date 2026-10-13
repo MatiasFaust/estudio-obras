@@ -2,6 +2,8 @@
 
 Mapa interactivo de Paysandú con las obras del estudio y sus notas e ideas.
 
+> **Sistema de gestión completo:** en la carpeta [`sistema/`](sistema/) está el nuevo sistema (Next.js + Supabase) con obras, clientes, mapa, notas y roles. Ver [sistema/README.md](sistema/README.md). Esta página simple sigue funcionando mientras tanto.
+
 - Mapa con Leaflet y OpenStreetMap, centrado en Paysandú.
 - Agregar, editar y eliminar obras (con confirmación), con padrón y cliente. La ubicación se marca con un clic en el mapa o con el botón **Buscar** a partir de la dirección.
 - Notas e ideas por obra: se agregan y se eliminan, y quedan con fecha y autor.
