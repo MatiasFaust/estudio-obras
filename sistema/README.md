@@ -73,7 +73,7 @@ Abrí <http://localhost:3000>. Sin credenciales de Supabase, el sistema arranca 
    Roles posibles: `admin`, `arquitecto` y `colaborador`. Para desactivar a alguien: `update public.profiles set active = false where email = '...';`
 
 ### 4.5 Conectar el sistema
-9. En *Project Settings → API* copiá la **Project URL** y la clave **anon public**.
+9. Tocá **Connect → Framework → Next.js** y copiá `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (en proyectos antiguos, la clave **anon public**).
 10. Copiá `.env.example` como `.env.local` y completá esos dos valores.
 11. Reiniciá `npm run dev`. Ahora el sistema pide correo y contraseña.
 
