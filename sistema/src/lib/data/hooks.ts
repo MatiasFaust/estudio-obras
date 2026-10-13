@@ -41,6 +41,17 @@ export function useNotes() {
   return useQuery({ queryKey: ["notes"], queryFn: () => repo.listNotes() });
 }
 
+/** Solo se consulta si el usuario puede ver información financiera */
+export function useFinances(enabled: boolean) {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["finances"], queryFn: () => repo.listFinances(), enabled });
+}
+
+export function usePayments(enabled: boolean) {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["payments"], queryFn: () => repo.listPayments(), enabled });
+}
+
 export function useActivity(projectId?: string, limit = 30) {
   const repo = useRepo();
   return useQuery({

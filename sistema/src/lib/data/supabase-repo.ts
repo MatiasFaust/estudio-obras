@@ -1,6 +1,6 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { getSupabase } from "../supabase/client";
-import type { Activity, Client, Note, Profile, Project, Stage } from "../types";
+import type { Activity, Client, Finance, Note, Payment, Profile, Project, Stage } from "../types";
 import { RepoError, type Repo } from "./repo";
 
 /** Traduce errores de PostgreSQL / RLS a mensajes comprensibles */
@@ -14,6 +14,7 @@ function fail(error: PostgrestError | { message: string; code?: string }): never
   }
   if (code === "23505") throw new RepoError("Ya existe un registro con esos datos.");
   if (code === "23514") throw new RepoError("Algún dato no cumple las validaciones.");
+  if (code === "P0001") throw new RepoError(error.message);
   if (code === "PGRST116") throw new RepoError("El registro no existe o no tenés acceso.");
   throw new RepoError(error.message);
 }
@@ -164,6 +165,31 @@ export function createSupabaseRepo(): Repo {
       await run(sb.from("notes").delete().eq("id", id).select().single());
     },
 
+    listFinances: async () =>
+      ((await run(sb.from("project_finances").select("*"))) as Finance[]).map((f) => ({
+        ...f,
+        agreed_amount: f.agreed_amount === null ? null : Number(f.agreed_amount),
+      })),
+    async setFinance(projectId, input) {
+      await run(sb.from("project_finances").upsert({ project_id: projectId, ...input }).select().single());
+    },
+    listPayments: async () =>
+      ((await run(sb.from("payments").select("*").order("paid_on", { ascending: false }))) as Payment[]).map((p) => ({
+        ...p,
+        amount: Number(p.amount),
+        amount_contract: Number(p.amount_contract),
+        exchange_rate: p.exchange_rate === null ? null : Number(p.exchange_rate),
+      })),
+    async createPayment(input) {
+      await run(sb.from("payments").insert(input).select().single());
+    },
+    async updatePayment(id, input) {
+      await run(sb.from("payments").update(input).eq("id", id).select().single());
+    },
+    async deletePayment(id) {
+      await run(sb.from("payments").delete().eq("id", id).select().single());
+    },
+
     async listActivity({ projectId, limit = 30 }) {
       let q = sb.from("activity_log").select("*, actor:profiles(full_name)").order("created_at", { ascending: false }).limit(limit);
       if (projectId) q = q.eq("project_id", projectId);
@@ -172,7 +198,7 @@ export function createSupabaseRepo(): Repo {
     },
 
     subscribe(onChange) {
-      const tables = ["clients", "projects", "project_members", "project_stages", "notes", "activity_log"];
+      const tables = ["clients", "projects", "project_members", "project_stages", "notes", "activity_log", "project_finances", "payments"];
       let channel = sb.channel("cambios-estudio");
       for (const table of tables) {
         channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, () => onChange(table));

@@ -1,9 +1,11 @@
-import { Building2, LayoutDashboard, Lightbulb, Map, Users, type LucideIcon } from "lucide-react";
+import { Banknote, Building2, LayoutDashboard, Lightbulb, Map, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Solo para administradores (información financiera) */
+  adminOnly?: boolean;
 }
 
 export const NAV: NavItem[] = [
@@ -11,6 +13,7 @@ export const NAV: NavItem[] = [
   { href: "/mapa", label: "Mapa de obras", icon: Map },
   { href: "/obras", label: "Obras", icon: Building2 },
   { href: "/clientes", label: "Clientes", icon: Users },
+  { href: "/pagos", label: "Pagos", icon: Banknote, adminOnly: true },
   { href: "/ideas", label: "Ideas del estudio", icon: Lightbulb },
 ];
 

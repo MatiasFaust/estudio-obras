@@ -1,4 +1,17 @@
-import type { NoteCategory, ProjectStatus, ProjectType, UserRole } from "./types";
+import type { Currency, NoteCategory, PaymentMethod, ProjectStatus, ProjectType, UserRole } from "./types";
+
+export const CURRENCIES: Record<Currency, string> = {
+  UYU: "Pesos uruguayos ($)",
+  USD: "Dólares (US$)",
+};
+
+export const PAYMENT_METHODS: Record<PaymentMethod, string> = {
+  transferencia: "Transferencia",
+  efectivo: "Efectivo",
+  cheque: "Cheque",
+  deposito: "Depósito",
+  otro: "Otro",
+};
 
 /** Grupos de estado que distingue el mapa y el dashboard */
 export type StatusGroup = "planificacion" | "activa" | "pausada" | "finalizada" | "archivada";

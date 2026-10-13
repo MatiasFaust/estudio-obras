@@ -15,5 +15,7 @@ export const can = {
   setManualProgress: isStaff,
   viewAllActivity: isStaff,
   manageUsers: isAdmin,
+  /** Información financiera (monto acordado y pagos) */
+  viewFinances: isAdmin,
   editNote: (p: Profile | null, note: Note) => !!p && p.active && (note.author_id === p.id || isStaff(p)),
 };

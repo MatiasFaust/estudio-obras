@@ -1,5 +1,6 @@
 import type {
-  Activity, Client, ClientInput, Note, NoteInput, Profile, Project, ProjectInput, Stage, StageInput,
+  Activity, Client, ClientInput, Finance, FinanceInput, Note, NoteInput, Payment, PaymentInput, Profile,
+  Project, ProjectInput, Stage, StageInput,
 } from "../types";
 
 export interface ActivityQuery {
@@ -59,6 +60,14 @@ export interface Repo {
   updateNote(id: string, input: Partial<NoteInput>): Promise<void>;
   setNoteResolved(id: string, resolved: boolean): Promise<void>;
   deleteNote(id: string): Promise<void>;
+
+  // Pagos (solo administradores)
+  listFinances(): Promise<Finance[]>;
+  setFinance(projectId: string, input: FinanceInput): Promise<void>;
+  listPayments(): Promise<Payment[]>;
+  createPayment(input: PaymentInput): Promise<void>;
+  updatePayment(id: string, input: PaymentInput): Promise<void>;
+  deletePayment(id: string): Promise<void>;
 
   // Historial
   listActivity(query: ActivityQuery): Promise<Activity[]>;

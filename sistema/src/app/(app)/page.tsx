@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { addDays, parseISO } from "date-fns";
 import {
-  ArrowRight, Building2, CalendarClock, ClipboardList, HardHat, Lightbulb, Map, PauseCircle, Plus, Users,
+  ArrowRight, Banknote, Building2, CalendarClock, ClipboardList, HardHat, Lightbulb, Map as MapIcon, PauseCircle, Plus, Users,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
@@ -15,9 +15,11 @@ import { StatusDot } from "@/components/common/status-badge";
 import { StatusDistribution, TypeBars } from "@/components/dashboard/charts";
 import { NoteDialog } from "@/components/notes/note-dialog";
 import { STATUS } from "@/lib/constants";
-import { useClients, useNotes, useProjects, useSession } from "@/lib/data/hooks";
-import { formatDate, isOverdue } from "@/lib/format";
+import { summarize } from "@/components/payments/summary";
+import { useClients, useFinances, useNotes, usePayments, useProjects, useSession } from "@/lib/data/hooks";
+import { formatDate, formatMoney, isOverdue } from "@/lib/format";
 import { can } from "@/lib/permissions";
+import type { Currency } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function Stat({ label, value, icon: Icon, href, tone }: {
@@ -30,6 +32,35 @@ function Stat({ label, value, icon: Icon, href, tone }: {
         <Icon className={cn("size-4", tone)} />
       </div>
       <div className="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight">{value}</div>
+    </Link>
+  );
+}
+
+/** Saldo por cobrar (solo administradores) */
+function PendingPayments() {
+  const projects = useProjects();
+  const finances = useFinances(true);
+  const payments = usePayments(true);
+  if (!finances.data || !payments.data) return null;
+
+  const totals = new Map<Currency, number>();
+  for (const f of finances.data) {
+    if (projects.data?.find((p) => p.id === f.project_id)?.status === "archivada") continue;
+    const s = summarize(f, payments.data.filter((p) => p.project_id === f.project_id));
+    if (s.balance && s.balance > 0) totals.set(s.currency, (totals.get(s.currency) ?? 0) + s.balance);
+  }
+
+  return (
+    <Link href="/pagos" className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-xl border bg-card px-4 py-3 text-sm transition-colors hover:border-foreground/20">
+      <span className="flex items-center gap-2 font-medium"><Banknote className="size-4 text-amber-600" /> Por cobrar</span>
+      {totals.size === 0 ? (
+        <span className="text-muted-foreground">No hay saldos pendientes.</span>
+      ) : (
+        [...totals.entries()].map(([cur, n]) => (
+          <span key={cur} className="text-base font-semibold tabular-nums text-amber-700 dark:text-amber-400">{formatMoney(n, cur)}</span>
+        ))
+      )}
+      <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">Ver pagos <ArrowRight className="size-3" /></span>
     </Link>
   );
 }
@@ -75,7 +106,7 @@ export default function DashboardPage() {
           <button type="button" className={buttonVariants({ size: "sm", variant: "outline" })} onClick={() => setDialog({ kind: "idea", key: Date.now() })}>
             <Lightbulb /> Anotar idea
           </button>
-          <Link href="/mapa" className={buttonVariants({ size: "sm", variant: "outline" })}><Map /> Mapa</Link>
+          <Link href="/mapa" className={buttonVariants({ size: "sm", variant: "outline" })}><MapIcon /> Mapa</Link>
         </div>
       </div>
 
@@ -87,6 +118,8 @@ export default function DashboardPage() {
         <Stat label="Notas pendientes" value={pendingNotes.length} icon={Lightbulb} href="/ideas" />
         <Stat label="Clientes" value={(clients.data ?? []).filter((c) => !c.archived_at).length} icon={Users} href="/clientes" />
       </div>
+
+      {can.viewFinances(profile) && <PendingPayments />}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card size="sm" className="lg:col-span-2">

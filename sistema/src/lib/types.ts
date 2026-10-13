@@ -116,7 +116,55 @@ export interface Activity {
   created_at: string;
 }
 
+export type Currency = "UYU" | "USD";
+export type PaymentMethod = "transferencia" | "efectivo" | "cheque" | "deposito" | "otro";
+
+/** Monto acordado de una obra (solo administradores) */
+export interface Finance {
+  project_id: string;
+  agreed_amount: number | null;
+  currency: Currency;
+  notes: string | null;
+  updated_at: string;
+}
+
+export interface Payment {
+  id: string;
+  project_id: string;
+  paid_on: string;
+  amount: number;
+  currency: Currency;
+  exchange_rate: number | null;
+  /** Monto en la moneda acordada de la obra */
+  amount_contract: number;
+  concept: string;
+  method: PaymentMethod;
+  receipt: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ---- Entradas de formularios ----
+
+export interface FinanceInput {
+  agreed_amount: number | null;
+  currency: Currency;
+  notes: string | null;
+}
+
+export interface PaymentInput {
+  project_id: string;
+  paid_on: string;
+  amount: number;
+  currency: Currency;
+  exchange_rate: number | null;
+  concept: string;
+  method: PaymentMethod;
+  receipt: string | null;
+  notes: string | null;
+}
 
 export interface ClientInput {
   kind: ClientKind;

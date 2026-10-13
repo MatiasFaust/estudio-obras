@@ -202,6 +202,30 @@ async function logout(page) {
   await sleep(800);
   check((await texts(page, 'main li h3')).length === 2, 'ideas del estudio: 2 ideas iniciales');
 
+  // Pagos (administradora)
+  await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
+  await sleep(1000);
+  const pagosTxt = await page.$eval('main', (e) => e.textContent);
+  check(pagosTxt.includes('Por cobrar en dólares') && pagosTxt.includes('US$ 21.000,00'), 'pagos: saldo por cobrar en USD (48.000 − 27.000)');
+  await page.goto(`${BASE}/obras/p1?tab=pagos`, { waitUntil: 'networkidle2' });
+  await sleep(1000);
+  await clickText(page, 'button', 'Registrar pago');
+  await sleep(500);
+  await page.type('#pay-concept', 'Certificado de avance 3');
+  await page.type('#pay-amount', '80.000');
+  await page.click('[aria-label="Moneda del pago"]');
+  await sleep(300);
+  await clickText(page, '[role=option]', 'UYU');
+  await sleep(300);
+  await page.type('#pay-rate', '40');
+  await sleep(200);
+  check((await page.$eval('[role=dialog]', (e) => e.textContent)).includes('US$ 2.000,00'), 'muestra la conversión con la cotización');
+  await clickText(page, 'button[type=submit]', 'Guardar pago');
+  await sleep(1000);
+  const panel = await page.$eval('main', (e) => e.textContent);
+  check(panel.includes('US$ 29.000,00') && panel.includes('US$ 19.000,00'), 'pago registrado: pagado 29.000 y saldo 19.000');
+  await page.screenshot({ path: path.join(OUT, 's8-pagos.png') });
+
   // Tema oscuro
   await page.click('button[aria-label="Perfil y opciones"]');
   await sleep(300);
@@ -255,6 +279,9 @@ async function logout(page) {
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
   await login(page, 'Diego Suárez');
   await page.screenshot({ path: path.join(OUT, 's5-movil-dashboard.png') });
+  await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
+  await sleep(800);
+  check((await page.$eval('main', (e) => e.textContent)).includes('Sin permiso'), 'arquitecto no accede a pagos');
   await page.goto(`${BASE}/obras/p1`, { waitUntil: 'networkidle2' });
   await sleep(1500);
   await page.screenshot({ path: path.join(OUT, 's6-movil-obra.png') });

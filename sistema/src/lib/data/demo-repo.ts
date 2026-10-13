@@ -1,6 +1,7 @@
 import { STATUS } from "../constants";
+import { convertAmount, formatMoney } from "../format";
 import { isAdmin, isStaff } from "../permissions";
-import type { Activity, Client, Note, Profile, Project, ProjectStatus, Stage } from "../types";
+import type { Activity, Client, Currency, Note, Payment, Profile, Project, ProjectStatus, Stage } from "../types";
 import { createDemoData, type DemoDB } from "./demo-seed";
 import { RepoError, type Repo } from "./repo";
 
@@ -20,7 +21,13 @@ const deny = (): never => {
 function load(): DemoDB {
   try {
     const raw = localStorage.getItem(DB_KEY);
-    if (raw) return JSON.parse(raw) as DemoDB;
+    if (raw) {
+      const db = JSON.parse(raw) as DemoDB;
+      // Datos guardados antes de existir el módulo de pagos
+      db.finances ??= [];
+      db.payments ??= [];
+      return db;
+    }
   } catch {
     /* almacenamiento no disponible o dañado */
   }
@@ -89,6 +96,13 @@ function log(db: DemoDB, actor: Profile, a: Omit<Activity, "id" | "actor_id" | "
 }
 
 const label = (p: Project) => `${p.code} · ${p.name}`;
+
+/** Igual que la función convert_payment de la base */
+function paymentInContract(amount: number, currency: Currency, rate: number | null, target: Currency): number {
+  const converted = convertAmount(amount, currency, target, rate);
+  if (converted === null) throw new RepoError(`Falta la cotización para convertir ${currency} a ${target}`);
+  return converted;
+}
 
 function findProject(db: DemoDB, id: string): Project {
   const p = db.projects.find((x) => x.id === id);
@@ -303,6 +317,8 @@ export function createDemoRepo(): Repo {
       db.members = db.members.filter((m) => m.project_id !== id);
       db.stages = db.stages.filter((s) => s.project_id !== id);
       db.notes = db.notes.filter((n) => n.project_id !== id);
+      db.finances = db.finances.filter((f) => f.project_id !== id);
+      db.payments = db.payments.filter((x) => x.project_id !== id);
       db.activity.forEach((a) => {
         if (a.project_id === id) a.project_id = null;
       });
@@ -448,12 +464,82 @@ export function createDemoRepo(): Repo {
       save(db);
     },
 
+    // ---------------- Pagos (solo administradores) ----------------
+    async listFinances() {
+      const db = load();
+      const user = requireUser(db);
+      return isAdmin(user) ? db.finances : [];
+    },
+    async setFinance(projectId, input) {
+      const db = load();
+      const user = requireUser(db);
+      if (!isAdmin(user)) deny();
+      const p = findProject(db, projectId);
+      const existing = db.finances.find((f) => f.project_id === projectId);
+      const currencyChanged = existing && existing.currency !== input.currency;
+      if (existing) Object.assign(existing, input, { updated_at: now() });
+      else db.finances.push({ project_id: projectId, ...input, updated_at: now() });
+      if (currencyChanged || !existing) {
+        for (const pay of db.payments.filter((x) => x.project_id === projectId)) {
+          pay.amount_contract = paymentInContract(pay.amount, pay.currency, pay.exchange_rate, input.currency);
+        }
+      }
+      log(db, user, {
+        entity_type: "payment", entity_id: projectId, project_id: projectId, action: "agreed",
+        summary: `fijó el monto acordado de ${label(p)} en ${input.agreed_amount === null ? "sin monto" : formatMoney(input.agreed_amount, input.currency)}`,
+      });
+      save(db);
+    },
+    async listPayments() {
+      const db = load();
+      const user = requireUser(db);
+      return isAdmin(user) ? [...db.payments].sort((a, b) => b.paid_on.localeCompare(a.paid_on)) : [];
+    },
+    async createPayment(input) {
+      const db = load();
+      const user = requireUser(db);
+      if (!isAdmin(user)) deny();
+      const p = findProject(db, input.project_id);
+      const target = db.finances.find((f) => f.project_id === p.id)?.currency ?? input.currency;
+      const pay: Payment = {
+        ...input, id: uid(), amount_contract: paymentInContract(input.amount, input.currency, input.exchange_rate, target),
+        created_by: user.id, created_at: now(), updated_at: now(),
+      };
+      db.payments.push(pay);
+      log(db, user, { entity_type: "payment", entity_id: pay.id, project_id: p.id, action: "created", summary: `registró un pago de ${formatMoney(pay.amount, pay.currency)} en ${label(p)}` });
+      save(db);
+    },
+    async updatePayment(id, input) {
+      const db = load();
+      const user = requireUser(db);
+      if (!isAdmin(user)) deny();
+      const pay = db.payments.find((x) => x.id === id);
+      if (!pay) throw new RepoError("El pago no existe.");
+      const p = findProject(db, pay.project_id);
+      const target = db.finances.find((f) => f.project_id === p.id)?.currency ?? input.currency;
+      Object.assign(pay, input, { amount_contract: paymentInContract(input.amount, input.currency, input.exchange_rate, target), updated_at: now() });
+      log(db, user, { entity_type: "payment", entity_id: id, project_id: p.id, action: "updated", summary: `modificó un pago de ${formatMoney(pay.amount, pay.currency)} en ${label(p)}` });
+      save(db);
+    },
+    async deletePayment(id) {
+      const db = load();
+      const user = requireUser(db);
+      if (!isAdmin(user)) deny();
+      const pay = db.payments.find((x) => x.id === id);
+      if (!pay) throw new RepoError("El pago no existe.");
+      const p = findProject(db, pay.project_id);
+      db.payments = db.payments.filter((x) => x.id !== id);
+      log(db, user, { entity_type: "payment", entity_id: id, project_id: p.id, action: "deleted", summary: `eliminó un pago de ${formatMoney(pay.amount, pay.currency)} en ${label(p)}` });
+      save(db);
+    },
+
     // ---------------- Historial ----------------
     async listActivity({ projectId, limit = 30 }) {
       const db = load();
       const user = requireUser(db);
       return db.activity
         .filter((a) => (projectId ? a.project_id === projectId : true))
+        .filter((a) => a.entity_type !== "payment" || isAdmin(user))
         .filter((a) => isStaff(user) || (a.project_id !== null && canAccessProject(db, user, a.project_id)))
         .slice(0, limit);
     },

@@ -142,6 +142,26 @@ check(!!(await fails_(ARQ, `insert into activity_log (entity_type, action, summa
 const colabLog = (await as(COLAB, `select count(*)::int as n from activity_log where project_id is null`)).rows[0].n;
 check(colabLog === 0, 'colaborador no ve historial general (solo de sus obras)');
 
+// --- Pagos (solo administradores)
+await db.exec(`update profiles set role = 'admin' where id = '${ADMIN}'`);
+const payProj = (await db.query(`select id from projects where name = 'Obra SQL 2'`)).rows[0].id;
+await as(ADMIN, `insert into project_finances (project_id, agreed_amount, currency) values ('${payProj}', 1000, 'USD')`);
+await as(ADMIN, `insert into payments (project_id, amount, currency, concept) values ('${payProj}', 300, 'USD', 'Adelanto')`);
+await as(ADMIN, `insert into payments (project_id, amount, currency, exchange_rate, concept) values ('${payProj}', 8000, 'UYU', 40, 'Pago en pesos')`);
+const paid = (await db.query(`select sum(amount_contract)::float as s from payments where project_id = '${payProj}'`)).rows[0].s;
+check(paid === 500, `pago en pesos convertido con cotización (total en USD = ${paid})`);
+check(!!(await fails_(ADMIN, `insert into payments (project_id, amount, currency, concept) values ('${payProj}', 100, 'UYU', 'Sin cotización')`)), 'exige cotización si la moneda difiere de la acordada');
+check(!!(await fails_(ADMIN, `insert into payments (project_id, amount, currency, concept) values ('${payProj}', -5, 'USD', 'Negativo')`)), 'rechaza montos negativos');
+await as(ADMIN, `update payments set exchange_rate = 40 where project_id = '${payProj}' and currency = 'USD'`);
+await as(ADMIN, `update project_finances set currency = 'UYU', agreed_amount = 40000 where project_id = '${payProj}'`);
+const paidUyu = (await db.query(`select sum(amount_contract)::float as s from payments where project_id = '${payProj}'`)).rows[0].s;
+check(paidUyu === 20000, `cambiar la moneda acordada recalcula los pagos (total en UYU = ${paidUyu})`);
+check((await as(ARQ, `select id from payments`)).rows.length === 0, 'arquitecto NO ve pagos');
+check((await as(ARQ, `select project_id from project_finances`)).rows.length === 0, 'arquitecto NO ve montos acordados');
+check(!!(await fails_(ARQ, `insert into payments (project_id, amount, currency, concept) values ('${payProj}', 1, 'UYU', 'x')`)), 'arquitecto NO registra pagos');
+check((await as(ARQ, `select id from activity_log where entity_type = 'payment'`)).rows.length === 0, 'arquitecto NO ve el historial de pagos');
+check((await as(ADMIN, `select id from activity_log where entity_type = 'payment'`)).rows.length >= 3, 'administrador ve el historial de pagos');
+
 // Clientes: no borrar con obras
 await db.exec(`update profiles set role = 'admin' where id = '${ADMIN}'`);
 check(!!(await fails_(ADMIN, `delete from clients where id = '${client}'`)), 'no se puede borrar un cliente con obras (FK restrict)');

@@ -51,7 +51,7 @@ Abrí <http://localhost:3000>. Sin credenciales de Supabase, el sistema arranca 
 1. Entrá a <https://supabase.com>, creá un proyecto (región sugerida: *South America (São Paulo)*) y guardá la contraseña de la base de datos.
 
 ### 4.2 Crear la base de datos
-2. En *SQL Editor → New query*, pegá **todo** el contenido de `supabase/migrations/20261012000001_etapa1.sql` y presioná **Run**.
+2. En *SQL Editor → New query*, ejecutá **en orden** cada archivo de `supabase/migrations/`: primero `20261012000001_etapa1.sql` y después `20261013000001_pagos.sql`. Para cada uno, pegá todo el contenido y presioná **Run**.
 3. Opcional, para probar: ejecutá también `supabase/seed.sql`, que carga datos ficticios marcados con "(DEMO)".
 4. Para cargar las obras reales del estudio, ejecutá `supabase/datos-reales/obras-iniciales.sql`. Ese archivo existe solo en la computadora del estudio y no se sube a GitHub.
 
@@ -86,7 +86,7 @@ Abrí <http://localhost:3000>. Sin credenciales de Supabase, el sistema arranca 
 | `npm run dev` | Servidor de desarrollo (<http://localhost:3000>) |
 | `npm run build` y luego `npm start` | Compilación y servidor de producción |
 | `npm run check` | Comprobación de tipos, lint y pruebas de la base de datos |
-| `npm run test:db` | 38 pruebas de la base de datos (tablas, permisos por rol, historial, validaciones) en un PostgreSQL embebido |
+| `npm run test:db` | 49 pruebas de la base de datos (tablas, permisos por rol, historial, validaciones) en un PostgreSQL embebido |
 | `npm run test:e2e` | Prueba de punta a punta en el navegador (modo demo). Requiere el servidor encendido y Microsoft Edge, o la variable `BROWSER_PATH` |
 
 ## 6. Publicar en internet
@@ -111,6 +111,7 @@ El sistema necesita un servidor Node.js, por la protección de rutas con `proxy.
   - Etapas con peso y avance ponderado (o avance manual autorizado), colaboradores asignados e historial de cambios.
 - **Clientes:** personas o empresas, con validación de cédula y RUT uruguayos, contacto, observaciones internas, obras asociadas, archivado, y protección para no borrar clientes con obras.
 - **Notas e ideas:** en cada obra y en "Ideas del estudio". Tienen editor con formato básico, categoría (idea, observación, pendiente, importante), autor y fecha, y se pueden buscar, filtrar, editar, resolver y eliminar.
+- **Pagos (solo administradores):** monto acordado por obra en pesos o dólares, registro de pagos (fecha, concepto, medio y comprobante), conversión con cotización cuando se paga en otra moneda, saldo y porcentaje pagado, resumen de lo que falta cobrar y franja "Por cobrar" en el panel. Migración: `supabase/migrations/20261013000001_pagos.sql`.
 - **Buscador global** (Ctrl + K): encuentra obras, clientes y notas, respetando los permisos.
 - **Tiempo real:** los cambios de un integrante aparecen en las pantallas de los demás.
 - **Tema claro y oscuro**, y diseño adaptado a computadora, tablet y celular.

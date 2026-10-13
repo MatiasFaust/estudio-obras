@@ -6,14 +6,16 @@ import { Brand } from "@/components/common/brand";
 import { ROLES } from "@/lib/constants";
 import { useSession } from "@/lib/data/hooks";
 import { initials } from "@/lib/format";
+import { can } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { isActive, NAV } from "./nav";
 
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const { profile } = useSession();
   return (
     <nav className="grid gap-0.5" aria-label="Navegación principal">
-      {NAV.map(({ href, label, icon: Icon }) => {
+      {NAV.filter((item) => !item.adminOnly || can.viewFinances(profile)).map(({ href, label, icon: Icon }) => {
         const active = isActive(pathname, href);
         return (
           <Link

@@ -29,6 +29,20 @@ export function initials(name: string): string {
     .join("");
 }
 
+/** 12500 → "$ 12.500,00"  ·  1200 (USD) → "US$ 1.200,00" */
+export function formatMoney(amount: number | null | undefined, currency: "UYU" | "USD"): string {
+  if (amount === null || amount === undefined) return "—";
+  const n = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+  return `${currency === "USD" ? "US$" : "$"} ${n}`;
+}
+
+/** Convierte un pago a la moneda acordada (cotización = pesos por dólar) */
+export function convertAmount(amount: number, from: "UYU" | "USD", to: "UYU" | "USD", rate: number | null): number | null {
+  if (from === to) return amount;
+  if (!rate) return null;
+  return Math.round((from === "UYU" ? amount / rate : amount * rate) * 100) / 100;
+}
+
 export function googleMapsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 }

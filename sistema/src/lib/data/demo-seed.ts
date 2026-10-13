@@ -1,4 +1,6 @@
-import type { Activity, Client, Note, NoteCategory, Profile, Project, ProjectStatus, ProjectType, Stage } from "../types";
+import type {
+  Activity, Client, Finance, Note, NoteCategory, Payment, Profile, Project, ProjectStatus, ProjectType, Stage,
+} from "../types";
 
 // DATOS FICTICIOS para el modo demostración. Ninguna persona, cliente u obra es real.
 
@@ -10,6 +12,8 @@ export interface DemoDB {
   stages: Stage[];
   notes: Note[];
   activity: Activity[];
+  finances: Finance[];
+  payments: Payment[];
 }
 
 export const DEMO_USERS = {
@@ -169,5 +173,27 @@ export function createDemoData(): DemoDB {
     stages,
     notes,
     activity,
+    finances: [
+      { project_id: "p1", agreed_amount: 48000, currency: "USD", notes: "Honorarios de proyecto y dirección de obra.", updated_at: created },
+      { project_id: "p3", agreed_amount: 380000, currency: "UYU", notes: null, updated_at: created },
+      { project_id: "p6", agreed_amount: 9000, currency: "USD", notes: null, updated_at: created },
+    ],
+    payments: [
+      Pay("pay1", "p1", -85, 12000, "USD", null, 12000, "Adelanto inicial", "transferencia", "0001"),
+      Pay("pay2", "p1", -40, 10000, "USD", null, 10000, "Certificado de avance 1", "transferencia", "0002"),
+      Pay("pay3", "p1", -10, 200000, "UYU", 40, 5000, "Certificado de avance 2 (en pesos)", "deposito", "0003"),
+      Pay("pay4", "p3", -30, 150000, "UYU", null, 150000, "Seña", "efectivo", null),
+      Pay("pay5", "p6", -150, 9000, "USD", null, 9000, "Pago total", "transferencia", "0004"),
+    ],
+  };
+}
+
+function Pay(id: string, project_id: string, ageDays: number, amount: number, currency: "UYU" | "USD",
+  exchange_rate: number | null, amount_contract: number, concept: string, method: Payment["method"], receipt: string | null): Payment {
+  const d = new Date();
+  d.setDate(d.getDate() + ageDays);
+  return {
+    id, project_id, paid_on: d.toISOString().slice(0, 10), amount, currency, exchange_rate, amount_contract,
+    concept, method, receipt, notes: null, created_by: DEMO_USERS.admin, created_at: d.toISOString(), updated_at: d.toISOString(),
   };
 }

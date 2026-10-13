@@ -96,5 +96,38 @@ export const noteSchema = z.object({
   category: z.enum(Object.keys(NOTE_CATEGORIES) as [NoteCategory, ...NoteCategory[]]),
 });
 
+/** Acepta "12.500,50", "12500.5" o "12500" */
+export function parseMoney(value: string): number | null {
+  const v = value.trim().replace(/\s/g, "");
+  if (!v) return null;
+  let normalized: string;
+  if (/,\d{1,2}$/.test(v)) normalized = v.replace(/\./g, "").replace(",", "."); // 12.500,50
+  else if (/^\d{1,3}(\.\d{3})+$/.test(v)) normalized = v.replace(/\./g, ""); // 12.500
+  else normalized = v.replace(/,/g, ""); // 12500.5 o 12,500.5
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+const moneyText = (required: boolean) =>
+  z.string().refine((v) => {
+    const n = parseMoney(v);
+    if (n === null) return !required;
+    return !Number.isNaN(n) && n > 0 && n < 1e12;
+  }, required ? "Ingresá un monto mayor a 0" : "Monto no válido");
+
+export const paymentSchema = z
+  .object({
+    paid_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida"),
+    amount: moneyText(true),
+    currency: z.enum(["UYU", "USD"]),
+    exchange_rate: z.string(),
+    concept: z.string().trim().min(1, "Ingresá el concepto").max(160),
+    method: z.enum(["transferencia", "efectivo", "cheque", "deposito", "otro"]),
+    receipt: optionalText(60),
+    notes: optionalText(2000),
+  });
+
+export type PaymentFormValues = z.infer<typeof paymentSchema>;
+
 /** "" → null para guardar en la base */
 export const nullIfEmpty = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
