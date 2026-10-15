@@ -22,9 +22,9 @@ Sistema de gestión para el estudio de arquitectura **RF** de Paysandú, Uruguay
 ## Estado al 15-10-2026
 
 - ✅ Etapa 1 completa y publicada: login, roles, panel, mapa, obras (etapas, avance, historial), clientes, notas e ideas.
-- ✅ Módulo de pagos (monto acordado, pagos UYU/USD con cotización, saldo por cobrar, solo admin): el código está publicado.
-- ⏳ **Pendiente en Supabase:** ejecutar `sistema/supabase/migrations/20261013000001_pagos.sql` en el SQL Editor. Para verificarlo: `curl "$URL/rest/v1/payments?select=id" -H "apikey: $KEY"` tiene que devolver `[]`, no `PGRST205`.
-- ⏳ **Pendiente en Supabase:** desactivar *Authentication → Sign In / Providers → Allow new users to sign up* (`/auth/v1/settings` tiene que mostrar `disable_signup: true`). También configurar *URL Configuration*: Site URL `https://estudio-rf.vercel.app` y Redirect URL `https://estudio-rf.vercel.app/restablecer`.
+- ✅ Módulo de pagos (monto acordado, pagos UYU/USD con cotización, saldo por cobrar, solo admin): publicado, y la migración `20261013000001_pagos.sql` ya se ejecutó en Supabase (`/rest/v1/payments?select=id` devuelve `[]`).
+- ✅ Supabase Auth: registros nuevos desactivados (`disable_signup: true`), Site URL `https://estudio-rf.vercel.app` y Redirect URL `https://estudio-rf.vercel.app/restablecer`.
+- Hay una segunda computadora preparada (proyecto en el Escritorio, con Git, Node, `vercel link` y `.env.local`). `datos-reales/` sigue estando solo en la PC de escritorio.
 - Las 3 obras reales del estudio ya están cargadas en Supabase. El SQL original está en `sistema/supabase/datos-reales/`, que está en `.gitignore` y existe solo en la PC de escritorio.
 
 ## Próximas etapas (ver `sistema/docs/ARQUITECTURA.md`)
