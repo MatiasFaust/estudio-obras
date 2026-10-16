@@ -24,20 +24,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const area = areaOf(pathname);
   const allowed = area === "desarrollo" ? isDevMember(profile) : hasArq(profile);
   const fallback = area === "desarrollo" ? (hasArq(profile) ? AREAS.arquitectura.home : null) : (isDevMember(profile) ? AREAS.desarrollo.home : null);
+  // Al abrir la página en una pestaña nueva (en el inicio de un estudio), quien tiene los dos
+  // estudios elige primero a cuál entrar. Se decide antes de mostrar nada, para que no se vea
+  // un instante el panel antes de los botones.
+  const isHome = pathname === AREAS.arquitectura.home || pathname === AREAS.desarrollo.home;
+  const mustChoose = !!profile?.active && isHome && hasArq(profile) && isDevMember(profile) && !areaChosen();
 
   useEffect(() => {
     if (!loading && !profile) {
       router.replace(pathname === "/" ? "/login" : `/login?next=${encodeURIComponent(pathname)}`);
     } else if (profile?.active && !allowed && fallback) {
       router.replace(fallback);
+    } else if (mustChoose) {
+      router.replace(CHOOSE_AREA);
     } else if (profile?.active && !areaChosen()) {
-      // Al abrir la página en una pestaña nueva, quien tiene los dos estudios elige primero a cuál entrar
-      if (pathname === "/" && hasArq(profile) && isDevMember(profile)) router.replace(CHOOSE_AREA);
-      else markAreaChosen();
+      markAreaChosen();
     }
-  }, [loading, profile, router, pathname, allowed, fallback]);
+  }, [loading, profile, router, pathname, allowed, fallback, mustChoose]);
 
-  if (loading || !profile) return <FullPageMessage>Cargando…</FullPageMessage>;
+  if (loading || !profile || mustChoose) return <FullPageMessage>Cargando…</FullPageMessage>;
 
   if (!profile.active) {
     return (

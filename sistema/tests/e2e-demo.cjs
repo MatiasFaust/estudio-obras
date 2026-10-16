@@ -359,11 +359,23 @@ async function logout(page) {
   await clickText(page, 'nav[aria-label="Elegir estudio"] a', 'Estudio de desarrollo');
   await page.waitForFunction(() => location.pathname === '/desarrollo', { timeout: 10000 }).catch(() => {});
   check(await page.evaluate(() => location.pathname === '/desarrollo'), 'eligiendo desarrollo se entra a desarrollo');
-  // Pestaña nueva (sin elección guardada): abrir la página vuelve a preguntar
-  await page.evaluate(() => sessionStorage.clear());
-  await page.goto(`${BASE}/`, { waitUntil: 'networkidle2' });
-  await page.waitForFunction(() => location.pathname === '/elegir', { timeout: 10000 }).catch(() => {});
-  check(await page.evaluate(() => location.pathname === '/elegir'), 'al abrir la página en una pestaña nueva se elige el estudio');
+  // Pestaña nueva (sin elección guardada): abrir la página vuelve a preguntar, sin mostrar
+  // antes ni un instante el panel de un estudio (se vigila cada cambio de la pantalla)
+  await page.evaluateOnNewDocument(() => {
+    new MutationObserver(() => {
+      const t = document.body ? document.body.innerText : '';
+      if (t.includes('Obras activas') || t.includes('propios en alquiler')) localStorage.setItem('e2e-vio-panel', location.pathname);
+    }).observe(document, { childList: true, subtree: true, characterData: true });
+  });
+  for (const start of ['/', '/desarrollo']) {
+    await page.evaluate(() => { sessionStorage.clear(); localStorage.removeItem('e2e-vio-panel'); });
+    await page.goto(`${BASE}${start}`, { waitUntil: 'networkidle2' });
+    await page.waitForFunction(() => location.pathname === '/elegir', { timeout: 10000 }).catch(() => {});
+    await sleep(500);
+    check(await page.evaluate(() => location.pathname === '/elegir'), `al abrir ${start} en una pestaña nueva se elige el estudio`);
+    const flash = await page.evaluate(() => localStorage.getItem('e2e-vio-panel'));
+    check(!flash, `al abrir ${start} no se ve el panel antes de los botones${flash ? ` (se vio en ${flash})` : ''}`);
+  }
   await page.screenshot({ path: path.join(OUT, 's10-movil-desarrollo.png') });
 
   console.log(errors.length ? 'ERRORES:\n' + [...new Set(errors)].join('\n') : 'Sin errores de JS');
