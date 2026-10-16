@@ -63,6 +63,16 @@ Implementado en la **Etapa 1**:
 - `notes`: notas de obra, o "Ideas del estudio" cuando `project_id` es nulo. Texto con formato (JSON de Tiptap), categoría y estado "resuelta".
 - `activity_log`: historial de cambios, escrito solo por *triggers*.
 
+**Estudio de desarrollo** (casas y terrenos propios en alquiler, migración `20261016000001_desarrollo.sql`):
+
+- `profiles.arquitectura` (booleano) y `profiles.desarrollo` (`admin`, `colaborador` o nulo): a qué estudio entra cada usuario. Sin `arquitectura`, el rol de siempre no cuenta (`current_user_role()` devuelve nulo).
+- `dev_properties`: casas y terrenos, con estado `alquilada`, `desocupada`, `en_construccion`, `terreno_baldio` o `alquiler_por_dia`. Las ve todo el equipo de desarrollo; solo el administrador las cambia.
+- `dev_tenants`, `dev_leases` (contratos) y `dev_rent_payments` (cobros por mes, en la moneda del contrato): solo administradores de desarrollo.
+- Un *trigger* impide contratos superpuestos en la misma casa y pasa la casa a "alquilada" o "desocupada" según haya un contrato vigente.
+- Lo que se adeuda no se guarda: se calcula en `src/lib/dev.ts` (meses vencidos del contrato menos lo cobrado en cada mes).
+- Las pantallas viven en `/desarrollo/*`. Los botones de arriba (`AreaSwitch`) solo aparecen si el usuario tiene acceso a los dos estudios, y `AppShell` redirige a quien entra a un área que no le corresponde.
+- El proyecto de Supabase `rfm-alquileres` (reservas de la página pública de RFM) es independiente y no se toca.
+
 Planificado (cada etapa agrega su migración):
 
 | Etapa | Tablas |

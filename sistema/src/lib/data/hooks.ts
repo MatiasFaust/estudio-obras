@@ -52,6 +52,28 @@ export function usePayments(enabled: boolean) {
   return useQuery({ queryKey: ["payments"], queryFn: () => repo.listPayments(), enabled });
 }
 
+// ---- Estudio de desarrollo (los datos de administración se piden solo si corresponde) ----
+
+export function useDevProperties() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["dev_properties"], queryFn: () => repo.listDevProperties() });
+}
+
+export function useDevTenants(enabled: boolean) {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["dev_tenants"], queryFn: () => repo.listDevTenants(), enabled });
+}
+
+export function useDevLeases(enabled: boolean) {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["dev_leases"], queryFn: () => repo.listDevLeases(), enabled });
+}
+
+export function useDevPayments(enabled: boolean) {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["dev_payments"], queryFn: () => repo.listDevPayments(), enabled });
+}
+
 export function useActivity(projectId?: string, limit = 30) {
   const repo = useRepo();
   return useQuery({

@@ -30,6 +30,10 @@ export interface Profile {
   email: string;
   role: UserRole;
   active: boolean;
+  /** Acceso al estudio de arquitectura (con el rol de arriba) */
+  arquitectura: boolean;
+  /** Acceso al estudio de desarrollo (null = sin acceso) */
+  desarrollo: DevRole | null;
   created_at: string;
 }
 
@@ -208,3 +212,81 @@ export interface NoteInput {
   content_text: string;
   category: NoteCategory;
 }
+
+// ---- Estudio de desarrollo (casas y terrenos propios en alquiler) ----
+
+export type DevRole = "admin" | "colaborador";
+export type PropertyKind = "casa" | "apartamento" | "terreno" | "local" | "otro";
+export type PropertyStatus = "alquilada" | "desocupada" | "en_construccion" | "terreno_baldio" | "alquiler_por_dia";
+
+export interface DevProperty {
+  id: string;
+  name: string;
+  kind: PropertyKind;
+  status: PropertyStatus;
+  address: string;
+  locality: string;
+  department: string;
+  padron: string | null;
+  lat: number | null;
+  lng: number | null;
+  bedrooms: number | null;
+  area_m2: number | null;
+  notes: string | null;
+  archived_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DevTenant {
+  id: string;
+  name: string;
+  document: string | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Contrato de alquiler (solo administradores de desarrollo) */
+export interface DevLease {
+  id: string;
+  property_id: string;
+  tenant_id: string;
+  start_date: string;
+  end_date: string | null;
+  terminated_on: string | null;
+  rent_amount: number;
+  currency: Currency;
+  /** Día del mes en que vence el alquiler */
+  due_day: number;
+  deposit: number | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Cobro de un mes de alquiler, en la moneda del contrato */
+export interface DevRentPayment {
+  id: string;
+  lease_id: string;
+  /** Mes que se paga: AAAA-MM-01 */
+  period: string;
+  paid_on: string;
+  amount: number;
+  method: PaymentMethod;
+  receipt: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DevPropertyInput = Omit<DevProperty, "id" | "archived_at" | "created_by" | "created_at" | "updated_at">;
+export type DevTenantInput = Omit<DevTenant, "id" | "created_by" | "created_at" | "updated_at">;
+export type DevLeaseInput = Omit<DevLease, "id" | "created_by" | "created_at" | "updated_at">;
+export type DevRentPaymentInput = Omit<DevRentPayment, "id" | "created_by" | "created_at" | "updated_at">;

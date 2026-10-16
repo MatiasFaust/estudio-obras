@@ -171,6 +171,46 @@ check(delAdmin === 1, 'administrador elimina obra');
 const orphan = (await db.query(`select (select count(*) from project_stages where project_id='${proj.id}')::int s, (select count(*) from notes where project_id='${proj.id}')::int n`)).rows[0];
 check(orphan.s === 0 && orphan.n === 0, 'eliminar obra borra sus etapas y notas');
 
+// --- Estudio de desarrollo
+const DEVCOLAB = '00000000-0000-0000-0000-000000000004';
+await db.exec(`insert into auth.users (id, email) values ('${DEVCOLAB}', 'dev@rfm.uy')`);
+await db.exec(`update profiles set desarrollo = 'admin' where id = '${ADMIN}'`);
+await db.exec(`update profiles set arquitectura = false, desarrollo = 'colaborador' where id = '${DEVCOLAB}'`);
+check((await db.query(`select arquitectura, desarrollo from profiles where id = '${COLAB}'`)).rows[0].arquitectura === true, 'usuarios nuevos: acceso a arquitectura por defecto, sin desarrollo');
+const devEsc = await fails_(COLAB, `update profiles set desarrollo = 'admin' where id = '${COLAB}'`);
+check(!!devEsc && /desarrollo/.test(devEsc), 'nadie puede darse acceso a desarrollo a sí mismo');
+check(!!(await fails_(DEVCOLAB, `update profiles set arquitectura = true where id = '${DEVCOLAB}'`)), 'usuario de desarrollo NO puede darse acceso a arquitectura');
+
+const house = (await as(ADMIN, `insert into dev_properties (name, address, lat, lng) values ('Casa SQL', 'Calle 3', -32.33, -58.09) returning id, status`)).rows[0];
+check(house.status === 'desocupada', 'propiedad nueva queda desocupada');
+const lot = (await as(ADMIN, `insert into dev_properties (name, kind, status) values ('Terreno SQL', 'terreno', 'terreno_baldio') returning id`)).rows[0].id;
+const tenant = (await as(ADMIN, `insert into dev_tenants (name, phone) values ('Inquilino SQL', '099 111') returning id`)).rows[0].id;
+const lease = (await as(ADMIN, `insert into dev_leases (property_id, tenant_id, start_date, end_date, rent_amount, currency)
+  values ('${house.id}', '${tenant}', current_date - 40, current_date + 300, 25000, 'UYU') returning id`)).rows[0].id;
+const st = async (id) => (await db.query(`select status from dev_properties where id = '${id}'`)).rows[0].status;
+check((await st(house.id)) === 'alquilada', 'contrato vigente → la casa pasa a "alquilada"');
+const overlap = await fails_(ADMIN, `insert into dev_leases (property_id, tenant_id, start_date, rent_amount) values ('${house.id}', '${tenant}', current_date, 1000)`);
+check(!!overlap && /contrato/.test(overlap), 'no permite dos contratos superpuestos en la misma casa');
+await as(ADMIN, `insert into dev_rent_payments (lease_id, period, amount) values ('${lease}', date_trunc('month', current_date)::date, 25000)`);
+check(!!(await fails_(ADMIN, `insert into dev_rent_payments (lease_id, period, amount) values ('${lease}', '2026-05-15', 100)`)), 'el mes cobrado siempre es el día 1');
+check(!!(await fails_(ADMIN, `insert into dev_rent_payments (lease_id, period, amount) values ('${lease}', '2026-05-01', 0)`)), 'rechaza cobros en cero');
+check(!!(await fails_(ADMIN, `delete from dev_tenants where id = '${tenant}'`)), 'no se puede borrar un inquilino con contratos');
+
+check((await as(DEVCOLAB, `select id from dev_properties`)).rows.length === 2, 'colaborador de desarrollo ve las propiedades');
+check((await as(DEVCOLAB, `select id from dev_tenants`)).rows.length === 0, 'colaborador de desarrollo NO ve inquilinos');
+check((await as(DEVCOLAB, `select id from dev_leases`)).rows.length === 0, 'colaborador de desarrollo NO ve contratos');
+check((await as(DEVCOLAB, `select id from dev_rent_payments`)).rows.length === 0, 'colaborador de desarrollo NO ve cobros');
+check(!!(await fails_(DEVCOLAB, `insert into dev_properties (name) values ('Intruso')`)), 'colaborador de desarrollo NO crea propiedades');
+check((await as(DEVCOLAB, `select id from projects`)).rows.length === 0, 'usuario solo de desarrollo NO ve obras del estudio');
+check((await as(DEVCOLAB, `select id from notes`)).rows.length === 0, 'usuario solo de desarrollo NO ve notas ni ideas del estudio');
+check((await as(ARQ, `select id from dev_properties`)).rows.length === 0, 'arquitecto sin acceso a desarrollo NO ve propiedades');
+
+await as(ADMIN, `update dev_leases set terminated_on = current_date - 1 where id = '${lease}'`);
+check((await st(house.id)) === 'desocupada', 'al terminar el contrato la casa vuelve a "desocupada"');
+check((await st(lot)) === 'terreno_baldio', 'terreno baldío conserva su estado');
+await as(ADMIN, `delete from dev_properties where id = '${house.id}'`);
+check((await db.query(`select count(*)::int as n from dev_leases where id = '${lease}'`)).rows[0].n === 0, 'borrar una propiedad borra sus contratos y cobros');
+
 // Seed visible
 const seedCount = (await as(ADMIN, `select count(*)::int as n from projects where name like '%(DEMO)%'`)).rows[0].n;
 check(seedCount > 0, `seed: ${seedCount} obras ficticias marcadas (DEMO)`);

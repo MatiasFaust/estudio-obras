@@ -1,5 +1,6 @@
 import type {
-  Activity, Client, ClientInput, Finance, FinanceInput, Note, NoteInput, Payment, PaymentInput, Profile,
+  Activity, Client, ClientInput, DevLease, DevLeaseInput, DevProperty, DevPropertyInput, DevRentPayment,
+  DevRentPaymentInput, DevTenant, DevTenantInput, Finance, FinanceInput, Note, NoteInput, Payment, PaymentInput, Profile,
   Project, ProjectInput, Stage, StageInput,
 } from "../types";
 
@@ -68,6 +69,24 @@ export interface Repo {
   createPayment(input: PaymentInput): Promise<void>;
   updatePayment(id: string, input: PaymentInput): Promise<void>;
   deletePayment(id: string): Promise<void>;
+
+  // Estudio de desarrollo. Propiedades: todo el equipo de desarrollo las ve.
+  // Inquilinos, contratos y cobros: solo administradores de desarrollo.
+  listDevProperties(): Promise<DevProperty[]>;
+  createDevProperty(input: DevPropertyInput): Promise<DevProperty>;
+  updateDevProperty(id: string, input: Partial<DevPropertyInput>): Promise<DevProperty>;
+  deleteDevProperty(id: string): Promise<void>;
+  listDevTenants(): Promise<DevTenant[]>;
+  createDevTenant(input: DevTenantInput): Promise<DevTenant>;
+  updateDevTenant(id: string, input: DevTenantInput): Promise<DevTenant>;
+  deleteDevTenant(id: string): Promise<void>;
+  listDevLeases(): Promise<DevLease[]>;
+  createDevLease(input: DevLeaseInput): Promise<void>;
+  updateDevLease(id: string, input: Partial<DevLeaseInput>): Promise<void>;
+  deleteDevLease(id: string): Promise<void>;
+  listDevPayments(): Promise<DevRentPayment[]>;
+  createDevPayment(input: DevRentPaymentInput): Promise<void>;
+  deleteDevPayment(id: string): Promise<void>;
 
   // Historial
   listActivity(query: ActivityQuery): Promise<Activity[]>;

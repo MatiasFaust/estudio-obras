@@ -1,8 +1,11 @@
 import { STATUS } from "../constants";
 import { convertAmount, formatMoney } from "../format";
-import { isAdmin, isStaff } from "../permissions";
-import type { Activity, Client, Currency, Note, Payment, Profile, Project, ProjectStatus, Stage } from "../types";
-import { createDemoData, type DemoDB } from "./demo-seed";
+import { isLeaseActive, leaseLastDay } from "../dev";
+import { hasArq, isAdmin, isDevAdmin, isDevMember, isStaff } from "../permissions";
+import type {
+  Activity, Client, Currency, DevLease, DevProperty, DevTenant, Note, Payment, Profile, Project, ProjectStatus, Stage,
+} from "../types";
+import { createDemoData, createDevDemoData, DEMO_PROFILES, type DemoDB } from "./demo-seed";
 import { RepoError, type Repo } from "./repo";
 
 // Modo demostración: los datos ficticios se guardan en el navegador (localStorage)
@@ -26,6 +29,16 @@ function load(): DemoDB {
       // Datos guardados antes de existir el módulo de pagos
       db.finances ??= [];
       db.payments ??= [];
+      // ...y antes de existir el estudio de desarrollo
+      if (!db.devProperties) {
+        Object.assign(db, createDevDemoData());
+        for (const demo of DEMO_PROFILES) {
+          const p = db.profiles.find((x) => x.id === demo.id);
+          if (p) Object.assign(p, { arquitectura: demo.arquitectura, desarrollo: demo.desarrollo });
+          else db.profiles.push({ ...demo, created_at: now() });
+        }
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+      }
       return db;
     }
   } catch {
@@ -68,8 +81,42 @@ function requireUser(db: DemoDB): Profile {
 }
 
 function canAccessProject(db: DemoDB, user: Profile, projectId: string | null): boolean {
-  if (!projectId) return false;
+  if (!projectId || !hasArq(user)) return false;
   return isStaff(user) || db.members.some((m) => m.project_id === projectId && m.user_id === user.id);
+}
+
+function requireDevAdmin(db: DemoDB): Profile {
+  const user = requireUser(db);
+  if (!isDevAdmin(user)) deny();
+  return user;
+}
+
+function findDev<T extends { id: string }>(list: T[], id: string, message: string): T {
+  const item = list.find((x) => x.id === id);
+  if (!item) throw new RepoError(message);
+  return item;
+}
+
+/** Mismas validaciones que la base: fechas coherentes y sin contratos superpuestos */
+function checkLease(db: DemoDB, l: DevLease) {
+  findDev(db.devProperties, l.property_id, "La propiedad no existe.");
+  findDev(db.devTenants, l.tenant_id, "El inquilino no existe.");
+  if (!(l.rent_amount > 0) || (l.end_date && l.end_date < l.start_date) || (l.terminated_on && l.terminated_on < l.start_date)) {
+    throw new RepoError("Algún dato no cumple las validaciones.");
+  }
+  const lastOf = (x: DevLease) => leaseLastDay(x) ?? "9999-12-31";
+  const overlap = db.devLeases.some(
+    (o) => o.property_id === l.property_id && o.id !== l.id && o.start_date <= lastOf(l) && l.start_date <= lastOf(o),
+  );
+  if (overlap) throw new RepoError("La propiedad ya tiene un contrato en esas fechas");
+}
+
+/** La casa pasa a "alquilada" con un contrato vigente y a "desocupada" cuando termina */
+function syncPropertyStatus(db: DemoDB, propertyId: string) {
+  const p = db.devProperties.find((x) => x.id === propertyId);
+  if (!p) return;
+  if (db.devLeases.some((l) => l.property_id === propertyId && isLeaseActive(l))) p.status = "alquilada";
+  else if (p.status === "alquilada") p.status = "desocupada";
 }
 
 function computeProgress(db: DemoDB, p: Project): number {
@@ -185,8 +232,10 @@ export function createDemoRepo(): Repo {
 
     async listProfiles() {
       const db = load();
-      requireUser(db);
-      return [...db.profiles].sort((a, b) => a.full_name.localeCompare(b.full_name));
+      const user = requireUser(db);
+      return db.profiles
+        .filter((p) => p.id === user.id || hasArq(user) || isDevMember(user))
+        .sort((a, b) => a.full_name.localeCompare(b.full_name));
     },
 
     // ---------------- Clientes ----------------
@@ -415,13 +464,13 @@ export function createDemoRepo(): Repo {
       const db = load();
       const user = requireUser(db);
       return db.notes
-        .filter((n) => n.project_id === null || canAccessProject(db, user, n.project_id))
+        .filter((n) => (n.project_id === null ? hasArq(user) : canAccessProject(db, user, n.project_id)))
         .sort((a, b) => b.created_at.localeCompare(a.created_at));
     },
     async createNote(input) {
       const db = load();
       const user = requireUser(db);
-      if (input.project_id && !canAccessProject(db, user, input.project_id)) deny();
+      if (!hasArq(user) || (input.project_id && !canAccessProject(db, user, input.project_id))) deny();
       const n: Note = { ...input, id: uid(), resolved_at: null, resolved_by: null, author_id: user.id, created_at: now(), updated_at: now() };
       db.notes.push(n);
       log(db, user, { entity_type: "note", entity_id: n.id, project_id: n.project_id, action: "created", summary: `agregó la nota "${n.title}" ${notePlace(db, n)}` });
@@ -530,6 +579,123 @@ export function createDemoRepo(): Repo {
       const p = findProject(db, pay.project_id);
       db.payments = db.payments.filter((x) => x.id !== id);
       log(db, user, { entity_type: "payment", entity_id: id, project_id: p.id, action: "deleted", summary: `eliminó un pago de ${formatMoney(pay.amount, pay.currency)} en ${label(p)}` });
+      save(db);
+    },
+
+    // ---------------- Estudio de desarrollo ----------------
+    async listDevProperties() {
+      const db = load();
+      const user = requireUser(db);
+      return isDevMember(user) ? [...db.devProperties].sort((a, b) => a.name.localeCompare(b.name)) : [];
+    },
+    async createDevProperty(input) {
+      const db = load();
+      const user = requireDevAdmin(db);
+      const p: DevProperty = { ...input, id: uid(), archived_at: null, created_by: user.id, created_at: now(), updated_at: now() };
+      db.devProperties.push(p);
+      save(db);
+      return p;
+    },
+    async updateDevProperty(id, input) {
+      const db = load();
+      requireDevAdmin(db);
+      const p = findDev(db.devProperties, id, "La propiedad no existe.");
+      Object.assign(p, input, { updated_at: now() });
+      save(db);
+      return p;
+    },
+    async deleteDevProperty(id) {
+      const db = load();
+      requireDevAdmin(db);
+      findDev(db.devProperties, id, "La propiedad no existe.");
+      const leases = new Set(db.devLeases.filter((l) => l.property_id === id).map((l) => l.id));
+      db.devPayments = db.devPayments.filter((x) => !leases.has(x.lease_id));
+      db.devLeases = db.devLeases.filter((l) => l.property_id !== id);
+      db.devProperties = db.devProperties.filter((p) => p.id !== id);
+      save(db);
+    },
+    async listDevTenants() {
+      const db = load();
+      const user = requireUser(db);
+      return isDevAdmin(user) ? [...db.devTenants].sort((a, b) => a.name.localeCompare(b.name)) : [];
+    },
+    async createDevTenant(input) {
+      const db = load();
+      const user = requireDevAdmin(db);
+      const t: DevTenant = { ...input, id: uid(), created_by: user.id, created_at: now(), updated_at: now() };
+      db.devTenants.push(t);
+      save(db);
+      return t;
+    },
+    async updateDevTenant(id, input) {
+      const db = load();
+      requireDevAdmin(db);
+      const t = findDev(db.devTenants, id, "El inquilino no existe.");
+      Object.assign(t, input, { updated_at: now() });
+      save(db);
+      return t;
+    },
+    async deleteDevTenant(id) {
+      const db = load();
+      requireDevAdmin(db);
+      if (db.devLeases.some((l) => l.tenant_id === id)) {
+        throw new RepoError("No se puede eliminar: hay registros vinculados (por ejemplo, contratos de este inquilino).");
+      }
+      db.devTenants = db.devTenants.filter((t) => t.id !== id);
+      save(db);
+    },
+    async listDevLeases() {
+      const db = load();
+      const user = requireUser(db);
+      return isDevAdmin(user) ? [...db.devLeases].sort((a, b) => b.start_date.localeCompare(a.start_date)) : [];
+    },
+    async createDevLease(input) {
+      const db = load();
+      const user = requireDevAdmin(db);
+      const l: DevLease = { ...input, id: uid(), created_by: user.id, created_at: now(), updated_at: now() };
+      checkLease(db, l);
+      db.devLeases.push(l);
+      syncPropertyStatus(db, l.property_id);
+      save(db);
+    },
+    async updateDevLease(id, input) {
+      const db = load();
+      requireDevAdmin(db);
+      const l = findDev(db.devLeases, id, "El contrato no existe.");
+      const next = { ...l, ...input, updated_at: now() };
+      checkLease(db, next);
+      Object.assign(l, next);
+      syncPropertyStatus(db, l.property_id);
+      save(db);
+    },
+    async deleteDevLease(id) {
+      const db = load();
+      requireDevAdmin(db);
+      const l = findDev(db.devLeases, id, "El contrato no existe.");
+      db.devPayments = db.devPayments.filter((x) => x.lease_id !== id);
+      db.devLeases = db.devLeases.filter((x) => x.id !== id);
+      syncPropertyStatus(db, l.property_id);
+      save(db);
+    },
+    async listDevPayments() {
+      const db = load();
+      const user = requireUser(db);
+      return isDevAdmin(user) ? [...db.devPayments].sort((a, b) => b.paid_on.localeCompare(a.paid_on)) : [];
+    },
+    async createDevPayment(input) {
+      const db = load();
+      const user = requireDevAdmin(db);
+      findDev(db.devLeases, input.lease_id, "El contrato no existe.");
+      if (!(input.amount > 0)) throw new RepoError("Algún dato no cumple las validaciones.");
+      if (!input.period.endsWith("-01")) throw new RepoError("Algún dato no cumple las validaciones.");
+      db.devPayments.push({ ...input, id: uid(), created_by: user.id, created_at: now(), updated_at: now() });
+      save(db);
+    },
+    async deleteDevPayment(id) {
+      const db = load();
+      requireDevAdmin(db);
+      findDev(db.devPayments, id, "El cobro no existe.");
+      db.devPayments = db.devPayments.filter((x) => x.id !== id);
       save(db);
     },
 

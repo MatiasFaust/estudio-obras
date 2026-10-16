@@ -24,6 +24,11 @@ Sistema de gestión para el estudio de arquitectura **RF** de Paysandú, Uruguay
 - ✅ Etapa 1 completa y publicada: login, roles, panel, mapa, obras (etapas, avance, historial), clientes, notas e ideas.
 - ✅ Módulo de pagos (monto acordado, pagos UYU/USD con cotización, saldo por cobrar, solo admin): publicado, y la migración `20261013000001_pagos.sql` ya se ejecutó en Supabase (`/rest/v1/payments?select=id` devuelve `[]`).
 - ✅ Supabase Auth: registros nuevos desactivados (`disable_signup: true`), Site URL `https://estudio-rf.vercel.app` y Redirect URL `https://estudio-rf.vercel.app/restablecer`.
+- ✅ Sección "Presupuestos" (antes "Pagos"): lista sin montos y con fecha de creación; los montos se ven en el Resumen y en la pestaña Pagos de cada obra.
+- 🆕 **Estudio de desarrollo** (casas propias en alquiler, la parte "RFM"): botones arriba para pasar de un estudio al otro, panel, mapa por estado, propiedades, inquilinos, contratos y cobros mensuales. Ver `sistema/docs/ARQUITECTURA.md`.
+  - ⏳ **Pendiente en Supabase:** ejecutar `sistema/supabase/migrations/20261016000001_desarrollo.sql` y después `sistema/supabase/datos-reales/desarrollo-casas-rfm.sql` (las 11 casas del mapa de RF_studio; está en `.gitignore` y existe solo en la segunda computadora). Hasta entonces la parte de desarrollo no funciona en la página publicada.
+  - Dar acceso a otra persona: crearla en *Authentication → Users* y en el SQL Editor `update profiles set desarrollo = 'colaborador', arquitectura = false where email = '…'` (solo desarrollo) o `desarrollo = 'admin'`.
+  - El proyecto de Supabase `rfm-alquileres` es la página pública de reservas de RF_studio (https://github.com/MatiasFaust/RF_studio). Sigue sin tocarse.
 - Hay una segunda computadora preparada (proyecto en el Escritorio, con Git, Node, `vercel link` y `.env.local`). `datos-reales/` sigue estando solo en la PC de escritorio.
 - Las 3 obras reales del estudio ya están cargadas en Supabase. El SQL original está en `sistema/supabase/datos-reales/`, que está en `.gitignore` y existe solo en la PC de escritorio.
 

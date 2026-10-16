@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useState } from "react";
 import { LogOut, Menu, Monitor, Moon, RotateCcw, Sun } from "lucide-react";
@@ -14,17 +14,20 @@ import {
   DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { ROLES } from "@/lib/constants";
+import { DEV_ROLES, ROLES } from "@/lib/constants";
 import { resetDemoData } from "@/lib/data/demo-repo";
 import { useSession } from "@/lib/data/hooks";
 import { initials } from "@/lib/format";
+import { hasArq } from "@/lib/permissions";
 import { GlobalSearch } from "./global-search";
-import { SidebarNav, SidebarUser } from "./sidebar";
+import { AREAS, areaOf } from "./nav";
+import { AreaSwitch, SidebarNav, SidebarUser } from "./sidebar";
 
 export function Topbar() {
   const { repo, profile } = useSession();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
+  const area = areaOf(usePathname());
   const queryClient = useQueryClient();
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -44,7 +47,7 @@ export function Topbar() {
         <SheetContent side="left" className="w-64 p-0">
           <SheetTitle className="sr-only">Menú</SheetTitle>
           <div className="px-4 pt-5 pb-4">
-            <Brand />
+            <Brand subtitle={AREAS[area].subtitle} />
           </div>
           <div className="flex-1 px-3">
             <SidebarNav onNavigate={() => setMenuOpen(false)} />
@@ -55,8 +58,10 @@ export function Topbar() {
         </SheetContent>
       </Sheet>
 
+      <AreaSwitch />
       <div className="flex min-w-0 flex-1 justify-center lg:justify-start">
-        <GlobalSearch />
+        {/* El buscador recorre obras, clientes y notas del estudio de arquitectura */}
+        {area === "arquitectura" && hasArq(profile) && <GlobalSearch />}
       </div>
 
       {profile && (
@@ -74,7 +79,7 @@ export function Topbar() {
             <DropdownMenuGroup>
               <DropdownMenuLabel>
                 <div className="truncate text-sm font-medium text-foreground">{profile.full_name}</div>
-                <div className="truncate font-normal">{profile.email} · {ROLES[profile.role]}</div>
+                <div className="truncate font-normal">{profile.email} · {area === "desarrollo" && profile.desarrollo ? DEV_ROLES[profile.desarrollo] : ROLES[profile.role]}</div>
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

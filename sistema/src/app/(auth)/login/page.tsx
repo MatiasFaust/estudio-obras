@@ -12,9 +12,10 @@ import { DEMO_USERS } from "@/lib/data/demo-seed";
 import { useSession } from "@/lib/data/hooks";
 
 const DEMO_OPTIONS = [
-  { id: DEMO_USERS.admin, name: "Laura Méndez", role: ROLES.admin, detail: "Acceso completo" },
+  { id: DEMO_USERS.admin, name: "Laura Méndez", role: ROLES.admin, detail: "Acceso completo a los dos estudios" },
   { id: DEMO_USERS.arquitecto, name: "Diego Suárez", role: ROLES.arquitecto, detail: "Obras, clientes y notas" },
   { id: DEMO_USERS.colaborador, name: "Sofía Pereira", role: ROLES.colaborador, detail: "Solo obras asignadas" },
+  { id: DEMO_USERS.desarrollo, name: "Martín Ferreira", role: ROLES.colaborador, detail: "Solo desarrollo: propiedades y mapa" },
 ];
 
 /** Solo rutas internas, para evitar redirecciones a otros sitios */

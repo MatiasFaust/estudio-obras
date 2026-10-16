@@ -1,4 +1,6 @@
-import type { Currency, NoteCategory, PaymentMethod, ProjectStatus, ProjectType, UserRole } from "./types";
+import type {
+  Currency, DevRole, NoteCategory, PaymentMethod, ProjectStatus, ProjectType, PropertyKind, PropertyStatus, UserRole,
+} from "./types";
 
 export const CURRENCIES: Record<Currency, string> = {
   UYU: "Pesos uruguayos ($)",
@@ -73,3 +75,28 @@ export const DEPARTMENTS = [
 
 /** Centro inicial del mapa: Paysandú */
 export const PAYSANDU_CENTER: [number, number] = [-32.3171, -58.0807];
+
+// ---- Estudio de desarrollo ----
+
+export const PROPERTY_STATUS: Record<PropertyStatus, { label: string; color: string }> = {
+  alquilada: { label: "Alquilada", color: "#2f7d4f" },
+  desocupada: { label: "Desocupada", color: "#b5432f" },
+  en_construccion: { label: "En construcción", color: "#d08a1f" },
+  terreno_baldio: { label: "Terreno baldío", color: "#8a6d4b" },
+  alquiler_por_dia: { label: "Alquiler por día", color: "#3b6ea8" },
+};
+
+export const PROPERTY_STATUS_ORDER = Object.keys(PROPERTY_STATUS) as PropertyStatus[];
+
+export const PROPERTY_KINDS: Record<PropertyKind, string> = {
+  casa: "Casa",
+  apartamento: "Apartamento",
+  terreno: "Terreno",
+  local: "Local",
+  otro: "Otro",
+};
+
+export const DEV_ROLES: Record<DevRole, string> = {
+  admin: "Administrador",
+  colaborador: "Colaborador",
+};

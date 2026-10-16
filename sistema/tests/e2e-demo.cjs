@@ -231,6 +231,26 @@ async function logout(page) {
   check(panel.includes('US$ 29.000,00') && panel.includes('US$ 19.000,00'), 'pago registrado: pagado 29.000 y saldo 19.000');
   await page.screenshot({ path: path.join(OUT, 's8-pagos.png') });
 
+  // --- Estudio de desarrollo (administradora de los dos estudios)
+  check(!!(await page.$('nav[aria-label="Área"]')), 'botones de los dos estudios visibles arriba');
+  await page.goto(`${BASE}/desarrollo`, { waitUntil: 'networkidle2' });
+  await sleep(1000);
+  const devTxt = await page.$eval('main', (e) => e.textContent);
+  check(devTxt.includes('Deben alquiler') && devTxt.includes('Casa Ombú (demo)'), 'desarrollo: panel con alquileres atrasados');
+  await page.goto(`${BASE}/desarrollo/mapa`, { waitUntil: 'networkidle2' });
+  await sleep(2000);
+  pins = (await page.$$('.leaflet-marker-icon')).length;
+  check(pins === 7, `desarrollo: mapa con 7 propiedades (hay ${pins})`);
+  await page.goto(`${BASE}/desarrollo/propiedades/d7`, { waitUntil: 'networkidle2' });
+  await sleep(1000);
+  check((await page.$eval('main', (e) => e.textContent)).includes('$ 36.000,00 (2 meses)'), 'desarrollo: la casa debe 2 meses');
+  await clickText(page, 'button', 'Registrar cobro');
+  await sleep(500);
+  await clickText(page, 'button[type=submit]', 'Registrar cobro');
+  await sleep(1000);
+  check((await page.$eval('main', (e) => e.textContent)).includes('$ 18.000,00 (1 mes)'), 'desarrollo: cobro registrado, queda debiendo 1 mes');
+  await page.screenshot({ path: path.join(OUT, 's9-desarrollo.png') });
+
   // Tema oscuro
   await page.click('button[aria-label="Perfil y opciones"]');
   await sleep(300);
@@ -295,6 +315,33 @@ async function logout(page) {
   await page.screenshot({ path: path.join(OUT, 's7-movil-mapa.png') });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   check(!overflow, 'sin desplazamiento horizontal en el celular');
+  check(!(await page.$('nav[aria-label="Área"]')), 'arquitecto sin desarrollo: no ve los botones de área');
+  await page.goto(`${BASE}/desarrollo`, { waitUntil: 'networkidle2' });
+  await page.waitForFunction(() => location.pathname === '/', { timeout: 10000 }).catch(() => {});
+  check(await page.evaluate(() => location.pathname === '/'), 'arquitecto sin desarrollo vuelve al estudio de arquitectura');
+
+  // --- Usuario solo de desarrollo
+  await logout(page);
+  await page.goto(`${BASE}/login`, { waitUntil: 'networkidle2' });
+  await clickText(page, 'button', 'Martín Ferreira');
+  await page.waitForFunction(() => location.pathname === '/desarrollo', { timeout: 10000 }).catch(() => {});
+  await sleep(1000);
+  check(await page.evaluate(() => location.pathname === '/desarrollo'), 'usuario solo de desarrollo entra directo a desarrollo');
+  await page.click('button[aria-label="Abrir menú"]');
+  await sleep(500);
+  const devNav = await texts(page, 'nav[aria-label="Navegación principal"] a');
+  check(devNav.includes('Propiedades') && !devNav.includes('Inquilinos') && !devNav.includes('Alquileres y cobros'), 'colaborador de desarrollo no ve inquilinos ni cobros');
+  await page.keyboard.press('Escape');
+  check(!(await page.$eval('main', (e) => e.textContent)).includes('Alquileres atrasados'), 'colaborador de desarrollo no ve montos');
+  await page.goto(`${BASE}/desarrollo/cobros`, { waitUntil: 'networkidle2' });
+  await sleep(800);
+  check((await page.$eval('main', (e) => e.textContent)).includes('Sin permiso'), 'colaborador de desarrollo no accede a cobros');
+  await page.goto(`${BASE}/obras`, { waitUntil: 'networkidle2' });
+  await page.waitForFunction(() => location.pathname === '/desarrollo', { timeout: 10000 }).catch(() => {});
+  check(await page.evaluate(() => location.pathname === '/desarrollo'), 'usuario solo de desarrollo no entra a obras');
+  await page.goto(`${BASE}/desarrollo/propiedades`, { waitUntil: 'networkidle2' });
+  await sleep(800);
+  check(!(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)), 'desarrollo sin desplazamiento horizontal en el celular');
 
   console.log(errors.length ? 'ERRORES:\n' + [...new Set(errors)].join('\n') : 'Sin errores de JS');
   console.log(fails ? `${fails} pruebas fallaron` : 'Todas las pruebas pasaron');

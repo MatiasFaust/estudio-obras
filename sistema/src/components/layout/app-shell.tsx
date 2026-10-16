@@ -5,6 +5,8 @@ import { useEffect } from "react";
 import { FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/lib/data/hooks";
+import { hasArq, isDevMember } from "@/lib/permissions";
+import { AREAS, areaOf } from "./nav";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 
@@ -18,11 +20,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Área de la pantalla actual y si el usuario puede entrar (si no, se lo lleva a la otra)
+  const area = areaOf(pathname);
+  const allowed = area === "desarrollo" ? isDevMember(profile) : hasArq(profile);
+  const fallback = area === "desarrollo" ? (hasArq(profile) ? AREAS.arquitectura.home : null) : (isDevMember(profile) ? AREAS.desarrollo.home : null);
+
   useEffect(() => {
     if (!loading && !profile) {
       router.replace(pathname === "/" ? "/login" : `/login?next=${encodeURIComponent(pathname)}`);
+    } else if (profile?.active && !allowed && fallback) {
+      router.replace(fallback);
     }
-  }, [loading, profile, router, pathname]);
+  }, [loading, profile, router, pathname, allowed, fallback]);
 
   if (loading || !profile) return <FullPageMessage>Cargando…</FullPageMessage>;
 
@@ -32,6 +41,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="grid gap-3">
           <p className="font-medium text-foreground">Tu usuario está desactivado.</p>
           <p>Pedile a un administrador del estudio que lo active.</p>
+          <Button variant="outline" onClick={() => repo.signOut()}>Cerrar sesión</Button>
+        </div>
+      </FullPageMessage>
+    );
+  }
+
+  if (!allowed) {
+    if (fallback) return <FullPageMessage>Cargando…</FullPageMessage>;
+    return (
+      <FullPageMessage>
+        <div className="grid gap-3">
+          <p className="font-medium text-foreground">Tu usuario no tiene acceso a ningún estudio.</p>
+          <p>Pedile a un administrador que te dé acceso.</p>
           <Button variant="outline" onClick={() => repo.signOut()}>Cerrar sesión</Button>
         </div>
       </FullPageMessage>

@@ -1,6 +1,8 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { getSupabase } from "../supabase/client";
-import type { Activity, Client, Finance, Note, Payment, Profile, Project, Stage } from "../types";
+import type {
+  Activity, Client, DevLease, DevProperty, DevRentPayment, DevTenant, Finance, Note, Payment, Profile, Project, Stage,
+} from "../types";
 import { RepoError, type Repo } from "./repo";
 
 /** Traduce errores de PostgreSQL / RLS a mensajes comprensibles */
@@ -190,6 +192,58 @@ export function createSupabaseRepo(): Repo {
       await run(sb.from("payments").delete().eq("id", id).select().single());
     },
 
+    // Estudio de desarrollo (los numeric de PostgreSQL llegan como texto)
+    listDevProperties: async () =>
+      ((await run(sb.from("dev_properties").select("*").order("name"))) as DevProperty[]).map((p) => ({
+        ...p,
+        area_m2: p.area_m2 === null ? null : Number(p.area_m2),
+      })),
+    async createDevProperty(input) {
+      return (await run(sb.from("dev_properties").insert(input).select().single())) as DevProperty;
+    },
+    async updateDevProperty(id, input) {
+      return (await run(sb.from("dev_properties").update(input).eq("id", id).select().single())) as DevProperty;
+    },
+    async deleteDevProperty(id) {
+      await run(sb.from("dev_properties").delete().eq("id", id).select().single());
+    },
+    listDevTenants: async () => (await run(sb.from("dev_tenants").select("*").order("name"))) as DevTenant[],
+    async createDevTenant(input) {
+      return (await run(sb.from("dev_tenants").insert(input).select().single())) as DevTenant;
+    },
+    async updateDevTenant(id, input) {
+      return (await run(sb.from("dev_tenants").update(input).eq("id", id).select().single())) as DevTenant;
+    },
+    async deleteDevTenant(id) {
+      await run(sb.from("dev_tenants").delete().eq("id", id).select().single());
+    },
+    listDevLeases: async () =>
+      ((await run(sb.from("dev_leases").select("*").order("start_date", { ascending: false }))) as DevLease[]).map((l) => ({
+        ...l,
+        rent_amount: Number(l.rent_amount),
+        deposit: l.deposit === null ? null : Number(l.deposit),
+      })),
+    async createDevLease(input) {
+      await run(sb.from("dev_leases").insert(input).select().single());
+    },
+    async updateDevLease(id, input) {
+      await run(sb.from("dev_leases").update(input).eq("id", id).select().single());
+    },
+    async deleteDevLease(id) {
+      await run(sb.from("dev_leases").delete().eq("id", id).select().single());
+    },
+    listDevPayments: async () =>
+      ((await run(sb.from("dev_rent_payments").select("*").order("paid_on", { ascending: false }))) as DevRentPayment[]).map((p) => ({
+        ...p,
+        amount: Number(p.amount),
+      })),
+    async createDevPayment(input) {
+      await run(sb.from("dev_rent_payments").insert(input).select().single());
+    },
+    async deleteDevPayment(id) {
+      await run(sb.from("dev_rent_payments").delete().eq("id", id).select().single());
+    },
+
     async listActivity({ projectId, limit = 30 }) {
       let q = sb.from("activity_log").select("*, actor:profiles(full_name)").order("created_at", { ascending: false }).limit(limit);
       if (projectId) q = q.eq("project_id", projectId);
@@ -198,7 +252,8 @@ export function createSupabaseRepo(): Repo {
     },
 
     subscribe(onChange) {
-      const tables = ["clients", "projects", "project_members", "project_stages", "notes", "activity_log", "project_finances", "payments"];
+      const tables = ["clients", "projects", "project_members", "project_stages", "notes", "activity_log", "project_finances", "payments",
+        "dev_properties", "dev_tenants", "dev_leases", "dev_rent_payments"];
       let channel = sb.channel("cambios-estudio");
       for (const table of tables) {
         channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, () => onChange(table));

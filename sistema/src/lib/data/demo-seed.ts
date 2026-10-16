@@ -1,5 +1,5 @@
 import type {
-  Activity, Client, Finance, Note, NoteCategory, Payment, Profile, Project, ProjectStatus, ProjectType, Stage,
+  Activity, Client, DevLease, DevProperty, DevRentPayment, DevTenant, Finance, Note, NoteCategory, Payment, Profile, Project, ProjectStatus, ProjectType, Stage,
 } from "../types";
 
 // DATOS FICTICIOS para el modo demostración. Ninguna persona, cliente u obra es real.
@@ -14,13 +14,105 @@ export interface DemoDB {
   activity: Activity[];
   finances: Finance[];
   payments: Payment[];
+  devProperties: DevProperty[];
+  devTenants: DevTenant[];
+  devLeases: DevLease[];
+  devPayments: DevRentPayment[];
 }
 
 export const DEMO_USERS = {
   admin: "demo-admin",
   arquitecto: "demo-arquitecto",
   colaborador: "demo-colaborador",
+  desarrollo: "demo-desarrollo",
 } as const;
+
+/** Usuarios ficticios y su acceso a cada área */
+export const DEMO_PROFILES: Omit<Profile, "created_at">[] = [
+  { id: DEMO_USERS.admin, full_name: "Laura Méndez (demo)", email: "admin@demo.local", role: "admin", active: true, arquitectura: true, desarrollo: "admin" },
+  { id: DEMO_USERS.arquitecto, full_name: "Diego Suárez (demo)", email: "arquitecto@demo.local", role: "arquitecto", active: true, arquitectura: true, desarrollo: null },
+  { id: DEMO_USERS.colaborador, full_name: "Sofía Pereira (demo)", email: "colaborador@demo.local", role: "colaborador", active: true, arquitectura: true, desarrollo: null },
+  { id: DEMO_USERS.desarrollo, full_name: "Martín Ferreira (demo)", email: "desarrollo@demo.local", role: "colaborador", active: true, arquitectura: false, desarrollo: "colaborador" },
+];
+
+/** Primer día de cada mes desde `from` (AAAA-MM-DD) hasta el mes actual + `extra` */
+export function monthsSince(from: string, extra = 0): string[] {
+  const [y, m] = from.split("-").map(Number);
+  const out: string[] = [];
+  const d = new Date(y, m - 1, 1);
+  const end = new Date();
+  end.setMonth(end.getMonth() + extra, 1);
+  while (d <= end) {
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`);
+    d.setMonth(d.getMonth() + 1);
+  }
+  return out;
+}
+
+/** Datos ficticios del estudio de desarrollo */
+export function createDevDemoData(): Pick<DemoDB, "devProperties" | "devTenants" | "devLeases" | "devPayments"> {
+  const created = stamp(-90);
+  const prop = (
+    id: string, name: string, kind: DevProperty["kind"], status: DevProperty["status"], address: string,
+    lat: number, lng: number, extra: Partial<DevProperty> = {},
+  ): DevProperty => ({
+    id, name, kind, status, address, locality: "Paysandú", department: "Paysandú", padron: null, lat, lng,
+    bedrooms: kind === "terreno" ? null : 2, area_m2: null, notes: null, archived_at: null,
+    created_by: DEMO_USERS.admin, created_at: created, updated_at: created, ...extra,
+  });
+  const devProperties: DevProperty[] = [
+    prop("d1", "Casa Los Álamos (demo)", "casa", "alquilada", "Calle Ficticia 210", -32.326, -58.085, { padron: "9001", area_m2: 85 }),
+    prop("d2", "Casa Jacarandá (demo)", "casa", "alquilada", "Pasaje Ejemplo 88", -32.3105, -58.072, { bedrooms: 3 }),
+    prop("d3", "Casa del Parque (demo)", "casa", "desocupada", "Av. Imaginaria 1450", -32.319, -58.095, { notes: "Pintar el dormitorio antes de volver a alquilar." }),
+    prop("d4", "Dúplex Norte A (demo)", "casa", "en_construccion", "Calle Inventada 32", -32.305, -58.066),
+    prop("d5", "Terreno Ruta 3 (demo)", "terreno", "terreno_baldio", "Ruta 3 km 365", -32.335, -58.06, { area_m2: 600, padron: "9002" }),
+    prop("d6", "Cabaña Termas 1 (demo)", "casa", "alquiler_por_dia", "Camino de prueba s/n", -31.8368, -57.8915, { locality: "Termas de Guaviyú", bedrooms: 1 }),
+    prop("d7", "Casa Ombú (demo)", "casa", "alquilada", "Calle Demostración 640", -32.322, -58.07),
+  ];
+
+  const tenant = (id: string, name: string, phone: string, extra: Partial<DevTenant> = {}): DevTenant => ({
+    id, name, document: null, phone, email: null, notes: null, created_by: DEMO_USERS.admin, created_at: created, updated_at: created, ...extra,
+  });
+  const devTenants: DevTenant[] = [
+    tenant("t1", "Inquilino Ejemplo Gómez", "099 100 001", { email: "gomez@ejemplo.uy" }),
+    tenant("t2", "Familia Prueba Rodríguez", "099 100 002"),
+    tenant("t3", "Carla Inventada Díaz", "099 100 003", { notes: "Prefiere que la llamen después de las 18 h." }),
+    tenant("t4", "Pedro Antiguo Inquilino", "099 100 004"),
+  ];
+
+  const lease = (
+    id: string, property_id: string, tenant_id: string, start: number, end: number | null, rent: number,
+    currency: DevLease["currency"], due_day: number, extra: Partial<DevLease> = {},
+  ): DevLease => ({
+    id, property_id, tenant_id, start_date: day(start), end_date: end === null ? null : day(end), terminated_on: null,
+    rent_amount: rent, currency, due_day, deposit: null, notes: null,
+    created_by: DEMO_USERS.admin, created_at: stamp(start), updated_at: stamp(start), ...extra,
+  });
+  const devLeases: DevLease[] = [
+    lease("l1", "d1", "t1", -400, 330, 22000, "UYU", 10, { deposit: 44000 }),
+    lease("l2", "d2", "t2", -200, 530, 600, "USD", 5),
+    // Vence el día 1: el mes actual siempre figura como adeudado (la prueba e2e cuenta con eso)
+    lease("l3", "d7", "t3", -120, 45, 18000, "UYU", 1),
+    lease("l4", "d3", "t4", -700, -45, 15000, "UYU", 10, { notes: "Entregó la casa en buen estado." }),
+  ];
+
+  // Cobros: l1 al día, l2 debe el mes actual, l3 debe los dos últimos meses, l4 pagó todo
+  const paidUntil: Record<string, number> = { l1: 0, l2: -1, l3: -2 };
+  const devPayments: DevRentPayment[] = [];
+  for (const l of devLeases) {
+    const periods = l.id === "l4" ? monthsSince(l.start_date).filter((p) => p <= l.end_date!) : monthsSince(l.start_date, paidUntil[l.id]);
+    periods.forEach((period, i) => {
+      const paid = new Date(`${period}T12:00:00`);
+      paid.setDate(l.due_day - 1);
+      devPayments.push({
+        id: `${l.id}-pay${i + 1}`, lease_id: l.id, period, paid_on: paid.toISOString().slice(0, 10), amount: l.rent_amount,
+        method: i % 3 === 0 ? "efectivo" : "transferencia", receipt: null, notes: null,
+        created_by: DEMO_USERS.admin, created_at: paid.toISOString(), updated_at: paid.toISOString(),
+      });
+    });
+  }
+  return { devProperties, devTenants, devLeases, devPayments };
+}
 
 const day = (offset: number) => {
   const d = new Date();
@@ -45,9 +137,7 @@ export function createDemoData(): DemoDB {
   const created = stamp(-60);
 
   const profiles: Profile[] = [
-    { id: DEMO_USERS.admin, full_name: "Laura Méndez (demo)", email: "admin@demo.local", role: "admin", active: true, created_at: created },
-    { id: DEMO_USERS.arquitecto, full_name: "Diego Suárez (demo)", email: "arquitecto@demo.local", role: "arquitecto", active: true, created_at: created },
-    { id: DEMO_USERS.colaborador, full_name: "Sofía Pereira (demo)", email: "colaborador@demo.local", role: "colaborador", active: true, created_at: created },
+    ...DEMO_PROFILES.map((p) => ({ ...p, created_at: created })),
   ];
 
   const client = (id: string, name: string, extra: Partial<Client> = {}): Client => ({
@@ -185,6 +275,7 @@ export function createDemoData(): DemoDB {
       Pay("pay4", "p3", -30, 150000, "UYU", null, 150000, "Seña", "efectivo", null),
       Pay("pay5", "p6", -150, 9000, "USD", null, 9000, "Pago total", "transferencia", "0004"),
     ],
+    ...createDevDemoData(),
   };
 }
 
