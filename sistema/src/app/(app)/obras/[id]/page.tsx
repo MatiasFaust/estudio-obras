@@ -20,6 +20,7 @@ import { SimpleSelect } from "@/components/common/simple-select";
 import { StatusBadge } from "@/components/common/status-badge";
 import { ProjectsMap } from "@/components/map";
 import { NotesPanel } from "@/components/notes/notes-panel";
+import { BudgetsPanel } from "@/components/budgets/budgets-panel";
 import { PaymentsPanel } from "@/components/payments/payments-panel";
 import { summarize } from "@/components/payments/summary";
 import { StagesPanel } from "@/components/projects/stages-panel";
@@ -29,7 +30,7 @@ import { formatDate, formatMoney, googleMapsUrl, isOverdue } from "@/lib/format"
 import { can } from "@/lib/permissions";
 import type { ProjectStatus } from "@/lib/types";
 
-const TABS = ["resumen", "etapas", "notas", "pagos", "historial"] as const;
+const TABS = ["resumen", "etapas", "notas", "presupuestos", "pagos", "historial"] as const;
 const STATUS_OPTIONS = SELECTABLE_STATUS.map((s) => ({ value: s, label: STATUS[s].label }));
 
 function Info({ label, children }: { label: string; children: React.ReactNode }) {
@@ -143,6 +144,7 @@ function ProjectDetail() {
           <TabsTrigger value="resumen">Resumen</TabsTrigger>
           <TabsTrigger value="etapas">Etapas y avance</TabsTrigger>
           <TabsTrigger value="notas">Notas{openNotes ? ` (${openNotes})` : ""}</TabsTrigger>
+          {can.viewFinances(profile) && <TabsTrigger value="presupuestos">Presupuestos</TabsTrigger>}
           {can.viewFinances(profile) && <TabsTrigger value="pagos">Pagos</TabsTrigger>}
           <TabsTrigger value="historial">Historial</TabsTrigger>
         </TabsList>
@@ -215,6 +217,7 @@ function ProjectDetail() {
 
         <TabsContent value="etapas"><StagesPanel project={project} /></TabsContent>
         <TabsContent value="notas"><NotesPanel projectId={project.id} /></TabsContent>
+        {can.viewFinances(profile) && <TabsContent value="presupuestos"><BudgetsPanel project={project} /></TabsContent>}
         {can.viewFinances(profile) && <TabsContent value="pagos"><PaymentsPanel project={project} /></TabsContent>}
         <TabsContent value="historial">
           <Card size="sm"><CardContent><ActivityList projectId={project.id} limit={100} /></CardContent></Card>

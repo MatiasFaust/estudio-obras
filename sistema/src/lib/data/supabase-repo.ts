@@ -1,7 +1,7 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { getSupabase } from "../supabase/client";
 import type {
-  Activity, Client, DevLease, DevProperty, DevRentPayment, DevTenant, Finance, Note, Payment, Profile, Project, Stage,
+  Activity, Budget, BudgetSettings, Client, DevLease, DevProperty, DevRentPayment, DevTenant, Finance, Note, Payment, Profile, Project, Stage,
 } from "../types";
 import { RepoError, type Repo } from "./repo";
 
@@ -25,6 +25,19 @@ async function run<T>(promise: PromiseLike<{ data: T; error: PostgrestError | nu
   const { data, error } = await promise;
   if (error) fail(error);
   return data;
+}
+
+const num = (v: number | string | null) => (v === null ? null : Number(v));
+
+function budgetFromDb(b: Budget): Budget {
+  return {
+    ...b,
+    price: num(b.price),
+    expenses_amount: num(b.expenses_amount),
+    wages_days: num(b.wages_days),
+    wages_amount: num(b.wages_amount),
+    payment_terms: (b.payment_terms ?? []).map((t) => ({ ...t, percent: Number(t.percent) })),
+  };
 }
 
 export function createSupabaseRepo(): Repo {
@@ -192,6 +205,24 @@ export function createSupabaseRepo(): Repo {
       await run(sb.from("payments").delete().eq("id", id).select().single());
     },
 
+    // Presupuestos (los numeric de PostgreSQL llegan como texto)
+    listBudgets: async () =>
+      ((await run(sb.from("budgets").select("*").order("issued_on", { ascending: false }))) as Budget[]).map(budgetFromDb),
+    async createBudget(input) {
+      return budgetFromDb((await run(sb.from("budgets").insert(input).select().single())) as Budget);
+    },
+    async updateBudget(id, input) {
+      await run(sb.from("budgets").update(input).eq("id", id).select().single());
+    },
+    async deleteBudget(id) {
+      await run(sb.from("budgets").delete().eq("id", id).select().single());
+    },
+    getBudgetSettings: async () =>
+      ((await run(sb.from("budget_settings").select("*").maybeSingle())) as BudgetSettings | null) ?? null,
+    async saveBudgetSettings(input) {
+      await run(sb.from("budget_settings").update(input).eq("id", true).select().single());
+    },
+
     // Estudio de desarrollo (los numeric de PostgreSQL llegan como texto)
     listDevProperties: async () =>
       ((await run(sb.from("dev_properties").select("*").order("name"))) as DevProperty[]).map((p) => ({
@@ -253,7 +284,7 @@ export function createSupabaseRepo(): Repo {
 
     subscribe(onChange) {
       const tables = ["clients", "projects", "project_members", "project_stages", "notes", "activity_log", "project_finances", "payments",
-        "dev_properties", "dev_tenants", "dev_leases", "dev_rent_payments"];
+        "dev_properties", "dev_tenants", "dev_leases", "dev_rent_payments", "budgets", "budget_settings"];
       let channel = sb.channel("cambios-estudio");
       for (const table of tables) {
         channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, () => onChange(table));

@@ -171,6 +171,22 @@ check(delAdmin === 1, 'administrador elimina obra');
 const orphan = (await db.query(`select (select count(*) from project_stages where project_id='${proj.id}')::int s, (select count(*) from notes where project_id='${proj.id}')::int n`)).rows[0];
 check(orphan.s === 0 && orphan.n === 0, 'eliminar obra borra sus etapas y notas');
 
+// --- Presupuestos en PDF (solo administradores)
+const budgetProj = (await db.query(`select id from projects where name = 'Obra SQL 2'`)).rows[0].id;
+const budget = (await as(ADMIN, `insert into budgets (project_id, number, recipient, price, payment_terms, includes)
+  values ('${budgetProj}', '2094', 'Sr. Cliente', 102000, '[{"label":"al comenzar","percent":35}]', '["3 imágenes"]') returning id, status`)).rows[0];
+check(budget.status === 'borrador', 'presupuesto nuevo queda como borrador');
+await as(ADMIN, `update budgets set status = 'aceptado' where id = '${budget.id}'`);
+check((await as(ADMIN, `select summary from activity_log where entity_id = '${budget.id}' order by id`)).rows.some((r) => r.summary.includes('2094') && r.summary.includes('aceptado')), 'historial registra el presupuesto y su estado');
+check(!!(await fails_(ADMIN, `insert into budgets (project_id, price) values ('${budgetProj}', -1)`)), 'rechaza precios negativos');
+check(!!(await fails_(ADMIN, `insert into budgets (project_id, includes) values ('${budgetProj}', '{"no":"lista"}')`)), 'lo que incluye tiene que ser una lista');
+check((await as(ARQ, `select id from budgets`)).rows.length === 0, 'arquitecto NO ve presupuestos');
+check(!!(await fails_(ARQ, `insert into budgets (project_id) values ('${budgetProj}')`)), 'arquitecto NO crea presupuestos');
+check((await as(ARQ, `select id from budget_settings`)).rows.length === 0, 'arquitecto NO ve la plantilla (firmas)');
+await as(ADMIN, `update budget_settings set studio_name = 'Estudio SQL', signers = '[{"name":"Firma","title":"Arq.","image":"data:image/png;base64,AAAA"}]'`);
+check((await as(ADMIN, `select studio_name from budget_settings`)).rows[0].studio_name === 'Estudio SQL', 'administrador edita la plantilla');
+check(!!(await fails_(ADMIN, `insert into budget_settings (id) values (false)`)), 'la plantilla es una sola');
+
 // --- Estudio de desarrollo
 const DEVCOLAB = '00000000-0000-0000-0000-000000000004';
 await db.exec(`insert into auth.users (id, email) values ('${DEVCOLAB}', 'dev@rfm.uy')`);

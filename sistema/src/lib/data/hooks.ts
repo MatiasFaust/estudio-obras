@@ -52,6 +52,18 @@ export function usePayments(enabled: boolean) {
   return useQuery({ queryKey: ["payments"], queryFn: () => repo.listPayments(), enabled });
 }
 
+// ---- Presupuestos en PDF (solo administradores) ----
+
+export function useBudgets(enabled: boolean) {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["budgets"], queryFn: () => repo.listBudgets(), enabled });
+}
+
+export function useBudgetSettings(enabled: boolean) {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["budget_settings"], queryFn: () => repo.getBudgetSettings(), enabled });
+}
+
 // ---- Estudio de desarrollo (los datos de administración se piden solo si corresponde) ----
 
 export function useDevProperties() {

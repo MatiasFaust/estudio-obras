@@ -3,9 +3,9 @@ import { convertAmount, formatMoney } from "../format";
 import { isLeaseActive, leaseLastDay } from "../dev";
 import { hasArq, isAdmin, isDevAdmin, isDevMember, isStaff } from "../permissions";
 import type {
-  Activity, Client, Currency, DevLease, DevProperty, DevTenant, Note, Payment, Profile, Project, ProjectStatus, Stage,
+  Activity, Budget, Client, Currency, DevLease, DevProperty, DevTenant, Note, Payment, Profile, Project, ProjectStatus, Stage,
 } from "../types";
-import { createDemoData, createDevDemoData, DEMO_PROFILES, type DemoDB } from "./demo-seed";
+import { createBudgetDemoData, createDemoData, createDevDemoData, DEMO_PROFILES, type DemoDB } from "./demo-seed";
 import { RepoError, type Repo } from "./repo";
 
 // Modo demostración: los datos ficticios se guardan en el navegador (localStorage)
@@ -37,6 +37,11 @@ function load(): DemoDB {
           if (p) Object.assign(p, { arquitectura: demo.arquitectura, desarrollo: demo.desarrollo });
           else db.profiles.push({ ...demo, created_at: now() });
         }
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+      }
+      // ...y antes de existir los presupuestos en PDF
+      if (!db.budgets) {
+        Object.assign(db, createBudgetDemoData());
         localStorage.setItem(DB_KEY, JSON.stringify(db));
       }
       return db;
@@ -83,6 +88,16 @@ function requireUser(db: DemoDB): Profile {
 function canAccessProject(db: DemoDB, user: Profile, projectId: string | null): boolean {
   if (!projectId || !hasArq(user)) return false;
   return isStaff(user) || db.members.some((m) => m.project_id === projectId && m.user_id === user.id);
+}
+
+const budgetLabel = (b: Pick<Budget, "number">) => (b.number ? `el presupuesto ${b.number}` : "un presupuesto");
+
+/** Mismas validaciones que la base */
+function checkBudget(b: Partial<Budget>) {
+  const neg = (n: number | null | undefined) => n !== null && n !== undefined && n < 0;
+  if (neg(b.price) || neg(b.expenses_amount) || neg(b.wages_amount) || neg(b.wages_days)) {
+    throw new RepoError("Algún dato no cumple las validaciones.");
+  }
 }
 
 function requireDevAdmin(db: DemoDB): Profile {
@@ -368,6 +383,7 @@ export function createDemoRepo(): Repo {
       db.notes = db.notes.filter((n) => n.project_id !== id);
       db.finances = db.finances.filter((f) => f.project_id !== id);
       db.payments = db.payments.filter((x) => x.project_id !== id);
+      db.budgets = db.budgets.filter((x) => x.project_id !== id);
       db.activity.forEach((a) => {
         if (a.project_id === id) a.project_id = null;
       });
@@ -579,6 +595,64 @@ export function createDemoRepo(): Repo {
       const p = findProject(db, pay.project_id);
       db.payments = db.payments.filter((x) => x.id !== id);
       log(db, user, { entity_type: "payment", entity_id: id, project_id: p.id, action: "deleted", summary: `eliminó un pago de ${formatMoney(pay.amount, pay.currency)} en ${label(p)}` });
+      save(db);
+    },
+
+    // ---------------- Presupuestos en PDF (solo administradores) ----------------
+    async listBudgets() {
+      const db = load();
+      const user = requireUser(db);
+      return isAdmin(user) ? [...db.budgets].sort((a, b) => b.issued_on.localeCompare(a.issued_on)) : [];
+    },
+    async createBudget(input) {
+      const db = load();
+      const user = requireUser(db);
+      if (!isAdmin(user)) deny();
+      const p = findProject(db, input.project_id);
+      checkBudget(input);
+      const b: Budget = { ...input, id: uid(), created_by: user.id, created_at: now(), updated_at: now() };
+      db.budgets.push(b);
+      log(db, user, { entity_type: "payment", entity_id: b.id, project_id: p.id, action: "created", summary: `creó ${budgetLabel(b)} en ${label(p)}` });
+      save(db);
+      return b;
+    },
+    async updateBudget(id, input) {
+      const db = load();
+      const user = requireUser(db);
+      if (!isAdmin(user)) deny();
+      const b = db.budgets.find((x) => x.id === id);
+      if (!b) throw new RepoError("El presupuesto no existe.");
+      const next = { ...b, ...input, updated_at: now() };
+      checkBudget(next);
+      const statusChanged = input.status !== undefined && input.status !== b.status;
+      Object.assign(b, next);
+      if (statusChanged) {
+        const p = findProject(db, b.project_id);
+        log(db, user, { entity_type: "payment", entity_id: id, project_id: p.id, action: "updated", summary: `marcó ${budgetLabel(b)} de ${label(p)} como ${b.status}` });
+      }
+      save(db);
+    },
+    async deleteBudget(id) {
+      const db = load();
+      const user = requireUser(db);
+      if (!isAdmin(user)) deny();
+      const b = db.budgets.find((x) => x.id === id);
+      if (!b) throw new RepoError("El presupuesto no existe.");
+      db.budgets = db.budgets.filter((x) => x.id !== id);
+      const p = findProject(db, b.project_id);
+      log(db, user, { entity_type: "payment", entity_id: id, project_id: p.id, action: "deleted", summary: `eliminó ${budgetLabel(b)} de ${label(p)}` });
+      save(db);
+    },
+    async getBudgetSettings() {
+      const db = load();
+      const user = requireUser(db);
+      return isAdmin(user) ? db.budgetSettings : null;
+    },
+    async saveBudgetSettings(input) {
+      const db = load();
+      const user = requireUser(db);
+      if (!isAdmin(user)) deny();
+      db.budgetSettings = { ...input, updated_at: now() };
       save(db);
     },
 

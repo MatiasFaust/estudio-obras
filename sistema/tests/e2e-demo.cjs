@@ -237,6 +237,44 @@ async function logout(page) {
   check(panel.includes('US$ 29.000,00') && panel.includes('US$ 19.000,00'), 'pago registrado: pagado 29.000 y saldo 19.000');
   await page.screenshot({ path: path.join(OUT, 's8-pagos.png') });
 
+  // --- Presupuestos en PDF
+  // Atrapa la descarga del PDF y devuelve sus primeros bytes y su nombre
+  const catchPdf = () => page.evaluate(() => new Promise((resolve) => {
+    HTMLAnchorElement.prototype.click = function () {
+      const name = this.download;
+      fetch(this.href).then((r) => r.arrayBuffer()).then((ab) => resolve({ name, head: String.fromCharCode(...new Uint8Array(ab).slice(0, 5)), size: ab.byteLength }));
+    };
+  }));
+  await page.goto(`${BASE}/obras/p1?tab=presupuestos`, { waitUntil: 'networkidle2' });
+  await sleep(1000);
+  check((await page.$eval('main', (e) => e.textContent)).includes('2094'), 'presupuestos: la obra muestra su presupuesto guardado');
+  await clickText(page, 'a', 'Nuevo presupuesto');
+  await page.waitForSelector('#bg-number', { timeout: 10000 });
+  await sleep(500);
+  check((await page.$eval('#bg-intro', (e) => e.value)).includes('De acuerdo a vuestra amable solicitud'), 'presupuesto nuevo arranca con el texto de la plantilla');
+  await page.type('#bg-number', '2095');
+  await page.type('#bg-price', '102.000');
+  await sleep(300);
+  check((await page.$eval('main', (e) => e.textContent)).includes('$ 35.700'), 'forma de pago: calcula el 35% de $ 102.000');
+  await clickText(page, 'button', 'Guardar');
+  await page.waitForFunction(() => /\/presupuestos\/[^/]+$/.test(location.pathname) && !location.pathname.endsWith('/nuevo'), { timeout: 10000 }).catch(() => {});
+  check(await page.evaluate(() => !location.pathname.endsWith('/nuevo')), 'presupuesto guardado en la obra');
+  await sleep(800);
+  const pdfPromise = catchPdf();
+  await clickText(page, 'button', 'Descargar PDF');
+  const pdfFile = await Promise.race([pdfPromise, sleep(15000).then(() => null)]);
+  check(!!pdfFile && pdfFile.head === '%PDF-' && pdfFile.size > 5000 && pdfFile.name === '2095.PRES.pdf', `descarga el PDF "2095.PRES.pdf" (${pdfFile ? pdfFile.size + ' bytes' : 'no se generó'})`);
+  await page.goto(`${BASE}/pagos/plantilla`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('#tp-name', { timeout: 10000 });
+  await page.$eval('#tp-name', (e) => { e.select?.(); });
+  await page.click('#tp-name', { clickCount: 3 });
+  await page.type('#tp-name', 'Estudio Prueba');
+  await clickText(page, 'button[type=submit]', 'Guardar plantilla');
+  await sleep(800);
+  await page.goto(`${BASE}/pagos/plantilla`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('#tp-name', { timeout: 10000 });
+  check((await page.$eval('#tp-name', (e) => e.value)) === 'Estudio Prueba', 'plantilla: se guarda y se vuelve a cargar');
+
   // --- Estudio de desarrollo (administradora de los dos estudios)
   check(!!(await page.$('nav[aria-label="Área"]')), 'botones de los dos estudios visibles arriba');
   await page.goto(`${BASE}/desarrollo`, { waitUntil: 'networkidle2' });
@@ -313,6 +351,9 @@ async function logout(page) {
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
   await sleep(800);
   check((await page.$eval('main', (e) => e.textContent)).includes('Sin permiso'), 'arquitecto no accede a pagos');
+  await page.goto(`${BASE}/pagos/plantilla`, { waitUntil: 'networkidle2' });
+  await sleep(800);
+  check((await page.$eval('main', (e) => e.textContent)).includes('Sin permiso'), 'arquitecto no accede a la plantilla de presupuestos');
   await page.goto(`${BASE}/obras/p1`, { waitUntil: 'networkidle2' });
   await sleep(1500);
   await page.screenshot({ path: path.join(OUT, 's6-movil-obra.png') });

@@ -290,3 +290,74 @@ export type DevPropertyInput = Omit<DevProperty, "id" | "archived_at" | "created
 export type DevTenantInput = Omit<DevTenant, "id" | "created_by" | "created_at" | "updated_at">;
 export type DevLeaseInput = Omit<DevLease, "id" | "created_by" | "created_at" | "updated_at">;
 export type DevRentPaymentInput = Omit<DevRentPayment, "id" | "created_by" | "created_at" | "updated_at">;
+
+// ---- Presupuestos en PDF (solo administradores) ----
+
+export type IvaMode = "mas_iva" | "iva_incluido" | "sin_iva";
+export type BudgetStatus = "borrador" | "enviado" | "aceptado" | "rechazado";
+
+export interface PaymentTerm {
+  /** Ej.: "al comenzar los trabajos" */
+  label: string;
+  percent: number;
+}
+
+export interface BudgetSigner {
+  name: string;
+  title: string;
+  /** Imagen de la firma (data URL) */
+  image: string | null;
+}
+
+export interface BudgetPartner {
+  name: string;
+  lines: string[];
+  /** Logo (data URL) */
+  logo: string | null;
+}
+
+/** Plantilla del estudio (una sola) */
+export interface BudgetSettings {
+  studio_name: string;
+  tagline: string;
+  address: string;
+  greeting: string;
+  /** Párrafo de presentación con {trabajo}, {area} y {padron} */
+  intro: string;
+  closing: string;
+  payment_terms: PaymentTerm[];
+  includes: string[];
+  excludes: string;
+  expenses_text: string;
+  note: string;
+  signers: BudgetSigner[];
+  footer: { lines: string[]; partners: BudgetPartner[] };
+  updated_at: string;
+}
+
+export interface Budget {
+  id: string;
+  project_id: string;
+  number: string;
+  issued_on: string;
+  recipient: string;
+  intro: string;
+  price: number | null;
+  currency: Currency;
+  iva_mode: IvaMode;
+  payment_terms: PaymentTerm[];
+  includes: string[];
+  excludes: string;
+  expenses_text: string;
+  expenses_amount: number | null;
+  wages_days: number | null;
+  wages_amount: number | null;
+  note: string;
+  status: BudgetStatus;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type BudgetInput = Omit<Budget, "id" | "created_by" | "created_at" | "updated_at">;
+export type BudgetSettingsInput = Omit<BudgetSettings, "updated_at">;

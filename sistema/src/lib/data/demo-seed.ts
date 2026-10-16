@@ -1,5 +1,5 @@
 import type {
-  Activity, Client, DevLease, DevProperty, DevRentPayment, DevTenant, Finance, Note, NoteCategory, Payment, Profile, Project, ProjectStatus, ProjectType, Stage,
+  Activity, Budget, BudgetSettings, Client, DevLease, DevProperty, DevRentPayment, DevTenant, Finance, Note, NoteCategory, Payment, Profile, Project, ProjectStatus, ProjectType, Stage,
 } from "../types";
 
 // DATOS FICTICIOS para el modo demostración. Ninguna persona, cliente u obra es real.
@@ -18,6 +18,8 @@ export interface DemoDB {
   devTenants: DevTenant[];
   devLeases: DevLease[];
   devPayments: DevRentPayment[];
+  budgets: Budget[];
+  budgetSettings: BudgetSettings;
 }
 
 export const DEMO_USERS = {
@@ -276,6 +278,7 @@ export function createDemoData(): DemoDB {
       Pay("pay5", "p6", -150, 9000, "USD", null, 9000, "Pago total", "transferencia", "0004"),
     ],
     ...createDevDemoData(),
+    ...createBudgetDemoData(),
   };
 }
 
@@ -287,4 +290,50 @@ function Pay(id: string, project_id: string, ageDays: number, amount: number, cu
     id, project_id, paid_on: d.toISOString().slice(0, 10), amount, currency, exchange_rate, amount_contract,
     concept, method, receipt, notes: null, created_by: DEMO_USERS.admin, created_at: d.toISOString(), updated_at: d.toISOString(),
   };
+}
+
+/** Plantilla y presupuesto de ejemplo (datos ficticios: ni direcciones, ni teléfonos, ni firmas reales) */
+export function createBudgetDemoData(): Pick<DemoDB, "budgets" | "budgetSettings"> {
+  const payment_terms = [
+    { label: "al comenzar los trabajos", percent: 35 },
+    { label: "contra la presentación en BPS, Catastro e IdeP", percent: 35 },
+    { label: "contra la aprobación de la IdeP", percent: 20 },
+    { label: "contra la habilitación final", percent: 10 },
+  ];
+  const includes = [
+    "3 imágenes (1 exterior y 2 interiores)",
+    "Realización de planos de albañilería, sanitaria, eléctrica, estructura y planilla de aberturas",
+    "Presentación de carpetas y trámites ante BPS, Catastro e Intendencia",
+  ];
+  const budgetSettings: BudgetSettings = {
+    studio_name: "Estudio Demo",
+    tagline: "Arquitectura | Interiorismo | Paisajismo",
+    address: "Calle Ficticia 123, Paysandú",
+    greeting: "De mi mayor consideración:",
+    intro: "De acuerdo a vuestra amable solicitud tengo el agrado de presupuestar los trabajos de {trabajo}, área aproximada {area} m², padrón {padron}.",
+    closing: "Saluda a Ud muy atte:",
+    payment_terms,
+    includes,
+    excludes: "No se incluye Dirección de Obra.",
+    expenses_text: "copia de planos, timbres, derechos de construcción, libro de trabajo, tributos",
+    note: "",
+    signers: [
+      { name: "LAURA MÉNDEZ (DEMO)", title: "Arquitecta", image: null },
+      { name: "DIEGO SUÁREZ (DEMO)", title: "Arquitecto", image: null },
+    ],
+    footer: {
+      lines: ["@estudio.demo", "099 000 000", "estudio@demo.local"],
+      partners: [{ name: "Paisajismo Demo", lines: ["@paisajismo.demo", "paisajismo@demo.local"], logo: null }],
+    },
+    updated_at: stamp(-30),
+  };
+  const budgets: Budget[] = [{
+    id: "b1", project_id: "p1", number: "2094", issued_on: day(-20), recipient: "Familia Ejemplo Acosta",
+    intro: "De acuerdo a vuestra amable solicitud tengo el agrado de presupuestar los trabajos de presentación de proyecto de vivienda, área aproximada 120 m², padrón 9001.",
+    price: 48000, currency: "USD", iva_mode: "mas_iva", payment_terms, includes,
+    excludes: "No se incluye Dirección de Obra.", expenses_text: budgetSettings.expenses_text, expenses_amount: 1200,
+    wages_days: 129, wages_amount: 6800, note: "", status: "aceptado",
+    created_by: DEMO_USERS.admin, created_at: stamp(-20), updated_at: stamp(-20),
+  }];
+  return { budgets, budgetSettings };
 }

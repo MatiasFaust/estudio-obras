@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Banknote, Lock, Search } from "lucide-react";
+import { Banknote, Lock, Search, Settings2 } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -61,7 +62,11 @@ export default function BudgetsPage() {
 
   return (
     <>
-      <PageHeader title="Presupuestos" description={`${rows.length} de ${all.length} obras · tocá una obra para ver su presupuesto y pagos`} />
+      <PageHeader
+        title="Presupuestos"
+        description={`${rows.length} de ${all.length} obras · tocá una obra para ver y armar sus presupuestos`}
+        actions={<Link href="/pagos/plantilla" className={buttonVariants({ variant: "outline" })}><Settings2 /> Plantilla</Link>}
+      />
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-72">
@@ -95,7 +100,7 @@ export default function BudgetsPage() {
               {rows.map(({ project: p }) => (
                 <TableRow key={p.id}>
                   <TableCell className="max-w-72">
-                    <Link href={`/obras/${p.id}?tab=pagos`} className="block hover:underline">
+                    <Link href={`/obras/${p.id}?tab=presupuestos`} className="block hover:underline">
                       <span className="block truncate font-medium">{p.name}</span>
                       <span className="block truncate text-xs text-muted-foreground">Creada el {formatDate(p.created_at)}</span>
                     </Link>

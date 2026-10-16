@@ -1,5 +1,5 @@
 import type {
-  Activity, Client, ClientInput, DevLease, DevLeaseInput, DevProperty, DevPropertyInput, DevRentPayment,
+  Activity, Budget, BudgetInput, BudgetSettings, BudgetSettingsInput, Client, ClientInput, DevLease, DevLeaseInput, DevProperty, DevPropertyInput, DevRentPayment,
   DevRentPaymentInput, DevTenant, DevTenantInput, Finance, FinanceInput, Note, NoteInput, Payment, PaymentInput, Profile,
   Project, ProjectInput, Stage, StageInput,
 } from "../types";
@@ -69,6 +69,14 @@ export interface Repo {
   createPayment(input: PaymentInput): Promise<void>;
   updatePayment(id: string, input: PaymentInput): Promise<void>;
   deletePayment(id: string): Promise<void>;
+
+  // Presupuestos en PDF y su plantilla (solo administradores)
+  listBudgets(): Promise<Budget[]>;
+  createBudget(input: BudgetInput): Promise<Budget>;
+  updateBudget(id: string, input: Partial<BudgetInput>): Promise<void>;
+  deleteBudget(id: string): Promise<void>;
+  getBudgetSettings(): Promise<BudgetSettings | null>;
+  saveBudgetSettings(input: BudgetSettingsInput): Promise<void>;
 
   // Estudio de desarrollo. Propiedades: todo el equipo de desarrollo las ve.
   // Inquilinos, contratos y cobros: solo administradores de desarrollo.
