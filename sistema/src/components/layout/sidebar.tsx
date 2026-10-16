@@ -92,7 +92,7 @@ export function Sidebar() {
   return (
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r bg-sidebar lg:flex">
       <div className="px-4 pt-5 pb-6">
-        <Brand subtitle={AREAS[areaOf(pathname)].subtitle} />
+        <Brand subtitle={AREAS[areaOf(pathname)].subtitle} logo={AREAS[areaOf(pathname)].logo} />
       </div>
       <div className="flex-1 overflow-y-auto px-3">
         <SidebarNav />

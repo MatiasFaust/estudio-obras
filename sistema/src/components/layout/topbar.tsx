@@ -47,7 +47,7 @@ export function Topbar() {
         <SheetContent side="left" className="w-64 p-0">
           <SheetTitle className="sr-only">Menú</SheetTitle>
           <div className="px-4 pt-5 pb-4">
-            <Brand subtitle={AREAS[area].subtitle} />
+            <Brand subtitle={AREAS[area].subtitle} logo={AREAS[area].logo} />
           </div>
           <div className="flex-1 px-3">
             <SidebarNav onNavigate={() => setMenuOpen(false)} />

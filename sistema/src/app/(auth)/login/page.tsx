@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Building2, FlaskConical, Home } from "lucide-react";
+import Image from "next/image";
+import { FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthCard } from "@/components/common/auth-card";
@@ -22,7 +23,6 @@ const DEMO_OPTIONS = [
 ];
 
 const AREA_KEY = "estudio-area";
-const AREA_ICONS = { arquitectura: Building2, desarrollo: Home } as const;
 const AREA_DETAIL: Record<Area, string> = { arquitectura: "Obras, clientes y presupuestos", desarrollo: "Casas y terrenos en alquiler" };
 
 /** Página a la que se quería entrar antes de iniciar sesión (solo rutas internas, para evitar redirecciones a otros sitios) */
@@ -53,7 +53,6 @@ function AreaPicker({ value, onChange }: { value: Area; onChange: (a: Area) => v
   return (
     <div role="radiogroup" aria-label="¿A qué estudio querés entrar?" className="mb-4 grid grid-cols-2 gap-3">
       {(Object.keys(AREAS) as Area[]).map((a) => {
-        const Icon = AREA_ICONS[a];
         const on = a === value;
         return (
           <button
@@ -64,10 +63,11 @@ function AreaPicker({ value, onChange }: { value: Area; onChange: (a: Area) => v
             onClick={() => onChange(a)}
             className={cn(
               "grid min-h-28 content-start justify-items-center gap-1.5 rounded-xl border-2 bg-card px-3 py-4 text-center shadow-sm transition-colors",
-              on ? "border-primary bg-primary/5" : "border-border hover:border-foreground/30",
+              on ? "bg-accent/60" : "border-border opacity-75 hover:border-foreground/30 hover:opacity-100",
             )}
+            style={on ? { borderColor: AREAS[a].color } : undefined}
           >
-            <Icon className={cn("size-6", on ? "text-primary" : "text-muted-foreground")} />
+            <Image src={AREAS[a].logo} alt="" width={56} height={56} unoptimized loading="eager" className="size-14 rounded-full" />
             <span className="text-sm leading-tight font-semibold">{AREAS[a].label}</span>
             <span className="text-[11px] leading-tight text-muted-foreground">{AREA_DETAIL[a]}</span>
           </button>
