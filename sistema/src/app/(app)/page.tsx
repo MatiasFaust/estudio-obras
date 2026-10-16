@@ -60,7 +60,7 @@ function PendingPayments() {
           <span key={cur} className="text-base font-semibold tabular-nums text-amber-700 dark:text-amber-400">{formatMoney(n, cur)}</span>
         ))
       )}
-      <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">Ver pagos <ArrowRight className="size-3" /></span>
+      <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">Ver presupuestos <ArrowRight className="size-3" /></span>
     </Link>
   );
 }

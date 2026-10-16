@@ -206,9 +206,10 @@ async function logout(page) {
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
   await sleep(1000);
   const pagosTxt = await page.$eval('main', (e) => e.textContent);
-  check(pagosTxt.includes('Por cobrar en dólares') && pagosTxt.includes('US$ 21.000,00'), 'pagos: saldo por cobrar en USD (48.000 − 27.000)');
+  check(pagosTxt.includes('Presupuestos') && pagosTxt.includes('Vivienda Acosta') && pagosTxt.includes('Creada el') && !pagosTxt.includes('US$'), 'presupuestos: listado con fecha de creación y sin montos');
   await page.goto(`${BASE}/obras/p1?tab=pagos`, { waitUntil: 'networkidle2' });
   await sleep(1000);
+  check((await page.$eval('main', (e) => e.textContent)).includes('US$ 21.000,00'), 'pagos de la obra: saldo por cobrar en USD (48.000 − 27.000)');
   await clickText(page, 'button', 'Registrar pago');
   await sleep(500);
   await page.type('#pay-concept', 'Certificado de avance 3');

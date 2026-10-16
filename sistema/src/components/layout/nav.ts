@@ -14,7 +14,7 @@ export const NAV: NavItem[] = [
   { href: "/obras", label: "Obras", icon: Building2 },
   { href: "/clientes", label: "Clientes", icon: Users },
   { href: "/ideas", label: "Ideas del estudio", icon: Lightbulb },
-  { href: "/pagos", label: "Pagos", icon: Banknote, adminOnly: true },
+  { href: "/pagos", label: "Presupuestos", icon: Banknote, adminOnly: true },
 ];
 
 export const isActive = (pathname: string, href: string) =>
