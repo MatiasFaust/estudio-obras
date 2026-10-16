@@ -21,10 +21,11 @@ import { StatusBadge } from "@/components/common/status-badge";
 import { ProjectsMap } from "@/components/map";
 import { NotesPanel } from "@/components/notes/notes-panel";
 import { PaymentsPanel } from "@/components/payments/payments-panel";
+import { summarize } from "@/components/payments/summary";
 import { StagesPanel } from "@/components/projects/stages-panel";
 import { PROJECT_TYPES, ROLES, SELECTABLE_STATUS, STATUS } from "@/lib/constants";
-import { useAction, useClients, useMembers, useNotes, useProfiles, useProjects, useRepo, useSession } from "@/lib/data/hooks";
-import { formatDate, googleMapsUrl, isOverdue } from "@/lib/format";
+import { useAction, useClients, useFinances, useMembers, useNotes, usePayments, useProfiles, useProjects, useRepo, useSession } from "@/lib/data/hooks";
+import { formatDate, formatMoney, googleMapsUrl, isOverdue } from "@/lib/format";
 import { can } from "@/lib/permissions";
 import type { ProjectStatus } from "@/lib/types";
 
@@ -52,6 +53,9 @@ function ProjectDetail() {
   const profiles = useProfiles();
   const members = useMembers(id);
   const notes = useNotes();
+  const showFinances = can.viewFinances(profile);
+  const finances = useFinances(showFinances);
+  const payments = usePayments(showFinances);
   const [confirm, setConfirm] = useState<"archive" | "delete" | null>(null);
 
   const initialTab = TABS.find((t) => t === search.get("tab")) ?? "resumen";
@@ -74,6 +78,10 @@ function ProjectDetail() {
   const archived = project.status === "archivada";
   const manage = can.manageProjects(profile);
   const late = isOverdue(project.due_date) && !["finalizada", "archivada"].includes(project.status);
+  const budget = summarize(
+    finances.data?.find((f) => f.project_id === project.id),
+    (payments.data ?? []).filter((p) => p.project_id === project.id),
+  );
 
   return (
     <>
@@ -157,6 +165,21 @@ function ProjectDetail() {
                       <span className={late ? "font-medium text-destructive" : undefined}>{formatDate(project.due_date)}{late && " · vencida"}</span>
                     </Info>
                     <Info label="Padrón">{project.padron ?? "—"}</Info>
+                    {showFinances && (
+                      <>
+                        <Info label="Presupuesto">
+                          {budget.agreed !== null ? (
+                            <span className="tabular-nums">{formatMoney(budget.agreed, budget.currency)}</span>
+                          ) : (
+                            <>Sin cargar · <button type="button" onClick={() => setTab("pagos")} className="text-primary hover:underline">Cargar</button></>
+                          )}
+                        </Info>
+                        <Info label="Por cobrar">
+                          <span className="font-medium tabular-nums">{formatMoney(budget.balance, budget.currency)}</span>
+                          {budget.count > 0 && <span className="text-muted-foreground"> · pagado {formatMoney(budget.paid, budget.currency)}</span>}
+                        </Info>
+                      </>
+                    )}
                     <Info label="Colaboradores">{team.length ? team.map((p) => p!.full_name).join(", ") : "—"}</Info>
                   </dl>
                 </CardContent>

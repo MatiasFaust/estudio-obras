@@ -207,6 +207,10 @@ async function logout(page) {
   await sleep(1000);
   const pagosTxt = await page.$eval('main', (e) => e.textContent);
   check(pagosTxt.includes('Presupuestos') && pagosTxt.includes('Vivienda Acosta') && pagosTxt.includes('Creada el') && !pagosTxt.includes('US$'), 'presupuestos: listado con fecha de creación y sin montos');
+  await page.goto(`${BASE}/obras/p1`, { waitUntil: 'networkidle2' });
+  await sleep(1000);
+  const resumenTxt = await page.$eval('main', (e) => e.textContent);
+  check(resumenTxt.includes('PresupuestoUS$ 48.000,00') && resumenTxt.includes('Por cobrarUS$ 21.000,00'), 'resumen de la obra: presupuesto y saldo por cobrar');
   await page.goto(`${BASE}/obras/p1?tab=pagos`, { waitUntil: 'networkidle2' });
   await sleep(1000);
   check((await page.$eval('main', (e) => e.textContent)).includes('US$ 21.000,00'), 'pagos de la obra: saldo por cobrar en USD (48.000 − 27.000)');
