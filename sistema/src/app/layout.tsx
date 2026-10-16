@@ -13,6 +13,9 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: { default: "Estudio · Gestión", template: "%s · Estudio" },
   description: "Sistema de gestión del estudio de arquitectura (Paysandú, Uruguay)",
+  // Nombre al instalarla como aplicación (ver manifest.ts)
+  applicationName: "Estudio RF",
+  appleWebApp: { title: "Estudio RF", capable: true, statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
