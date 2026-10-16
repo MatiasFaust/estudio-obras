@@ -49,25 +49,25 @@
 }
 
 :root {
-  /* Blanco, grises cálidos, grafito y verde oscuro */
-  --background: oklch(0.985 0.002 100);
-  --foreground: oklch(0.2 0.005 100);
+  /* Inspirado en el Instagram de RF. estudio: grises fríos, carbón y el gris azulado del logo */
+  --background: oklch(0.975 0.003 250);
+  --foreground: oklch(0.24 0.012 255);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.005 100);
+  --card-foreground: oklch(0.24 0.012 255);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.005 100);
-  --primary: oklch(0.36 0.06 160);
+  --popover-foreground: oklch(0.24 0.012 255);
+  --primary: oklch(0.45 0.028 255);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.955 0.003 100);
-  --secondary-foreground: oklch(0.22 0.005 100);
-  --muted: oklch(0.955 0.003 100);
-  --muted-foreground: oklch(0.52 0.006 100);
-  --accent: oklch(0.95 0.012 160);
-  --accent-foreground: oklch(0.3 0.05 160);
+  --secondary: oklch(0.95 0.004 250);
+  --secondary-foreground: oklch(0.26 0.012 255);
+  --muted: oklch(0.95 0.004 250);
+  --muted-foreground: oklch(0.52 0.012 255);
+  --accent: oklch(0.94 0.01 255);
+  --accent-foreground: oklch(0.33 0.03 255);
   --destructive: oklch(0.577 0.2 27.325);
-  --border: oklch(0.91 0.004 100);
-  --input: oklch(0.89 0.004 100);
-  --ring: oklch(0.55 0.07 160);
+  --border: oklch(0.905 0.005 250);
+  --input: oklch(0.88 0.006 250);
+  --ring: oklch(0.6 0.03 255);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -75,47 +75,57 @@
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
   --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.25 0.005 100);
-  --sidebar-primary: oklch(0.36 0.06 160);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.95 0.012 160);
-  --sidebar-accent-foreground: oklch(0.3 0.05 160);
-  --sidebar-border: oklch(0.91 0.004 100);
-  --sidebar-ring: oklch(0.55 0.07 160);
+  --sidebar-foreground: oklch(0.27 0.012 255);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: oklch(0.905 0.005 250);
+  --sidebar-ring: var(--ring);
 }
 
 .dark {
-  --background: oklch(0.17 0.004 100);
-  --foreground: oklch(0.96 0.002 100);
-  --card: oklch(0.21 0.004 100);
-  --card-foreground: oklch(0.96 0.002 100);
-  --popover: oklch(0.22 0.004 100);
-  --popover-foreground: oklch(0.96 0.002 100);
-  --primary: oklch(0.72 0.1 160);
-  --primary-foreground: oklch(0.18 0.02 160);
-  --secondary: oklch(0.26 0.004 100);
-  --secondary-foreground: oklch(0.96 0.002 100);
-  --muted: oklch(0.26 0.004 100);
-  --muted-foreground: oklch(0.7 0.005 100);
-  --accent: oklch(0.28 0.03 160);
-  --accent-foreground: oklch(0.88 0.06 160);
+  --background: oklch(0.17 0.008 255);
+  --foreground: oklch(0.95 0.004 250);
+  --card: oklch(0.21 0.009 255);
+  --card-foreground: oklch(0.95 0.004 250);
+  --popover: oklch(0.22 0.009 255);
+  --popover-foreground: oklch(0.95 0.004 250);
+  --primary: oklch(0.78 0.03 255);
+  --primary-foreground: oklch(0.2 0.02 255);
+  --secondary: oklch(0.26 0.009 255);
+  --secondary-foreground: oklch(0.95 0.004 250);
+  --muted: oklch(0.26 0.009 255);
+  --muted-foreground: oklch(0.7 0.012 255);
+  --accent: oklch(0.28 0.015 255);
+  --accent-foreground: oklch(0.9 0.02 255);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.6 0.08 160);
+  --ring: oklch(0.62 0.03 255);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.19 0.004 100);
-  --sidebar-foreground: oklch(0.92 0.002 100);
-  --sidebar-primary: oklch(0.72 0.1 160);
-  --sidebar-primary-foreground: oklch(0.18 0.02 160);
-  --sidebar-accent: oklch(0.28 0.03 160);
-  --sidebar-accent-foreground: oklch(0.88 0.06 160);
+  --sidebar: oklch(0.19 0.008 255);
+  --sidebar-foreground: oklch(0.92 0.004 250);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.6 0.08 160);
+}
+
+/* Estudio de desarrollo: el azul oscuro del logo [rf] (AppShell pone data-area en <html>) */
+:root[data-area="desarrollo"] {
+  --primary: oklch(0.31 0.055 265);
+  --accent: oklch(0.94 0.014 265);
+  --accent-foreground: oklch(0.3 0.05 265);
+  --ring: oklch(0.55 0.05 265);
+}
+:root.dark[data-area="desarrollo"] {
+  --primary: oklch(0.76 0.06 265);
+  --primary-foreground: oklch(0.2 0.03 265);
+  --accent: oklch(0.28 0.03 265);
+  --accent-foreground: oklch(0.9 0.03 265);
+  --ring: oklch(0.6 0.05 265);
 }
 
 /* ---------- Mapa (Leaflet) ---------- */

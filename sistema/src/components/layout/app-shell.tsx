@@ -30,6 +30,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isHome = pathname === AREAS.arquitectura.home || pathname === AREAS.desarrollo.home;
   const mustChoose = !!profile?.active && isHome && hasArq(profile) && isDevMember(profile) && !areaChosen();
 
+  // Color de cada estudio (globals.css): se marca en <html> para que también lo usen los diálogos
+  useEffect(() => {
+    document.documentElement.dataset.area = area;
+    return () => {
+      delete document.documentElement.dataset.area;
+    };
+  }, [area]);
+
   useEffect(() => {
     if (!loading && !profile) {
       router.replace(pathname === "/" ? "/login" : `/login?next=${encodeURIComponent(pathname)}`);
