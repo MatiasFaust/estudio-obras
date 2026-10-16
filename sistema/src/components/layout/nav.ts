@@ -13,8 +13,8 @@ export const NAV: NavItem[] = [
   { href: "/mapa", label: "Mapa de obras", icon: Map },
   { href: "/obras", label: "Obras", icon: Building2 },
   { href: "/clientes", label: "Clientes", icon: Users },
-  { href: "/pagos", label: "Pagos", icon: Banknote, adminOnly: true },
   { href: "/ideas", label: "Ideas del estudio", icon: Lightbulb },
+  { href: "/pagos", label: "Pagos", icon: Banknote, adminOnly: true },
 ];
 
 export const isActive = (pathname: string, href: string) =>
