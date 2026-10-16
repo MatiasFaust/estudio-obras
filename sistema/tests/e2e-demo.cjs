@@ -343,6 +343,18 @@ async function logout(page) {
   await sleep(800);
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)), 'desarrollo sin desplazamiento horizontal en el celular');
 
+  // --- Elegir el estudio en la pantalla de ingreso
+  await logout(page);
+  await page.goto(`${BASE}/login`, { waitUntil: 'networkidle2' });
+  const areas = await texts(page, '[role=radiogroup] [role=radio]');
+  check(areas.length === 2 && areas[0].includes('Estudio de arquitectura') && areas[1].includes('Estudio de desarrollo'), 'ingreso: dos cuadros para elegir el estudio');
+  await clickText(page, '[role=radio]', 'Estudio de desarrollo');
+  await sleep(200);
+  await clickText(page, 'button', 'Laura Méndez');
+  await page.waitForFunction(() => location.pathname === '/desarrollo', { timeout: 10000 }).catch(() => {});
+  check(await page.evaluate(() => location.pathname === '/desarrollo'), 'ingreso: eligiendo desarrollo se entra directo a desarrollo');
+  await page.screenshot({ path: path.join(OUT, 's10-movil-desarrollo.png') });
+
   console.log(errors.length ? 'ERRORES:\n' + [...new Set(errors)].join('\n') : 'Sin errores de JS');
   console.log(fails ? `${fails} pruebas fallaron` : 'Todas las pruebas pasaron');
   await browser.close();

@@ -4,10 +4,15 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AuthCard } from "@/components/common/auth-card";
 import { Field } from "@/components/common/field";
 import { useRepo } from "@/lib/data/hooks";
 
 export default function RecoverPage() {
+  return <AuthCard><RecoverForm /></AuthCard>;
+}
+
+function RecoverForm() {
   const repo = useRepo();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);

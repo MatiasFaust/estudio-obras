@@ -5,12 +5,17 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AuthCard } from "@/components/common/auth-card";
 import { Field } from "@/components/common/field";
 import { useSession } from "@/lib/data/hooks";
 
 // Se llega desde el enlace del correo de recuperación. Supabase abre la sesión
 // automáticamente con el código del enlace; acá se elige la contraseña nueva.
 export default function ResetPasswordPage() {
+  return <AuthCard><ResetPasswordForm /></AuthCard>;
+}
+
+function ResetPasswordForm() {
   const { repo, profile, loading } = useSession();
   const router = useRouter();
   const [password, setPassword] = useState("");

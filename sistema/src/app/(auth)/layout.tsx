@@ -5,7 +5,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
     <main className="flex min-h-dvh items-center justify-center bg-muted/40 px-4 py-10">
       <div className="w-full max-w-sm">
         <Brand className="mb-6 justify-center" />
-        <div className="rounded-xl border bg-card p-6 shadow-sm">{children}</div>
+        {children}
       </div>
     </main>
   );
