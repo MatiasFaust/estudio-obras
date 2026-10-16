@@ -13,16 +13,18 @@ export interface NavItem {
 /** Las dos áreas del sistema: el estudio de arquitectura y el de desarrollo (casas en alquiler) */
 export type Area = "arquitectura" | "desarrollo";
 
-export const AREAS: Record<Area, { label: string; short: string; home: string; subtitle: string; logo: string; color: string }> = {
+export const AREAS: Record<Area, { label: string; short: string; home: string; subtitle: string; detail: string; logo: string }> = {
   arquitectura: {
     label: "Estudio de arquitectura", short: "Arquitectura", home: "/", subtitle: "Gestión · Paysandú",
-    logo: "/logos/arquitectura.png", color: "#4a5664",
+    detail: "Obras, clientes y presupuestos", logo: "/logos/arquitectura.png",
   },
   desarrollo: {
     label: "Estudio de desarrollo", short: "Desarrollo", home: "/desarrollo", subtitle: "Casas en alquiler",
-    logo: "/logos/desarrollo.png", color: "#1b2a47",
+    detail: "Casas y terrenos en alquiler", logo: "/logos/desarrollo.png",
   },
 };
+
+export { areaChosen, CHOOSE_AREA, markAreaChosen } from "@/lib/areas";
 
 export const areaOf = (pathname: string): Area =>
   pathname === "/desarrollo" || pathname.startsWith("/desarrollo/") ? "desarrollo" : "arquitectura";

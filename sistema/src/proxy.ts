@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/config";
+import { CHOOSE_AREA } from "@/lib/areas";
 
 const PUBLIC_PATHS = ["/login", "/recuperar", "/restablecer"];
 
@@ -39,7 +40,7 @@ export async function proxy(request: NextRequest) {
   }
   if (signedIn && path === "/login") {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = CHOOSE_AREA;
     url.search = "";
     return NextResponse.redirect(url);
   }

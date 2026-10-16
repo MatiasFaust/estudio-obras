@@ -6,7 +6,7 @@ import { FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/lib/data/hooks";
 import { hasArq, isDevMember } from "@/lib/permissions";
-import { AREAS, areaOf } from "./nav";
+import { AREAS, areaChosen, areaOf, CHOOSE_AREA, markAreaChosen } from "./nav";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 
@@ -30,6 +30,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       router.replace(pathname === "/" ? "/login" : `/login?next=${encodeURIComponent(pathname)}`);
     } else if (profile?.active && !allowed && fallback) {
       router.replace(fallback);
+    } else if (profile?.active && !areaChosen()) {
+      // Al abrir la página en una pestaña nueva, quien tiene los dos estudios elige primero a cuál entrar
+      if (pathname === "/" && hasArq(profile) && isDevMember(profile)) router.replace(CHOOSE_AREA);
+      else markAreaChosen();
     }
   }, [loading, profile, router, pathname, allowed, fallback]);
 

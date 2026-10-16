@@ -26,6 +26,12 @@ const texts = (page, sel) => page.$$eval(sel, (els) => els.map((e) => e.textCont
 async function login(page, name) {
   await page.goto(`${BASE}/login`, { waitUntil: 'networkidle2' });
   await clickText(page, 'button', name);
+  // Quien tiene los dos estudios elige primero; quien tiene uno solo entra directo
+  await page.waitForFunction(() => ['/', '/elegir'].includes(location.pathname), { timeout: 10000 });
+  if (await page.evaluate(() => location.pathname === '/elegir')) {
+    await page.waitForFunction(() => location.pathname === '/' || !!document.querySelector('nav[aria-label="Elegir estudio"] a'), { timeout: 10000 });
+    if (await page.$('nav[aria-label="Elegir estudio"] a')) await clickText(page, 'nav[aria-label="Elegir estudio"] a', 'Estudio de arquitectura');
+  }
   await page.waitForFunction(() => location.pathname === '/', { timeout: 10000 });
   await sleep(800);
 }
@@ -343,16 +349,21 @@ async function logout(page) {
   await sleep(800);
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)), 'desarrollo sin desplazamiento horizontal en el celular');
 
-  // --- Elegir el estudio en la pantalla de ingreso
+  // --- Después de ingresar, quien tiene los dos estudios elige a cuál entrar
   await logout(page);
   await page.goto(`${BASE}/login`, { waitUntil: 'networkidle2' });
-  const areas = await texts(page, '[role=radiogroup] [role=radio]');
-  check(areas.length === 2 && areas[0].includes('Estudio de arquitectura') && areas[1].includes('Estudio de desarrollo'), 'ingreso: dos cuadros para elegir el estudio');
-  await clickText(page, '[role=radio]', 'Estudio de desarrollo');
-  await sleep(200);
   await clickText(page, 'button', 'Laura Méndez');
+  await page.waitForFunction(() => document.querySelectorAll('nav[aria-label="Elegir estudio"] a').length === 2, { timeout: 10000 }).catch(() => {});
+  const areas = await texts(page, 'nav[aria-label="Elegir estudio"] a');
+  check(await page.evaluate(() => location.pathname === '/elegir') && areas.length === 2 && areas[0].includes('Estudio de arquitectura') && areas[1].includes('Estudio de desarrollo'), 'después de ingresar aparecen los dos botones para elegir el estudio');
+  await clickText(page, 'nav[aria-label="Elegir estudio"] a', 'Estudio de desarrollo');
   await page.waitForFunction(() => location.pathname === '/desarrollo', { timeout: 10000 }).catch(() => {});
-  check(await page.evaluate(() => location.pathname === '/desarrollo'), 'ingreso: eligiendo desarrollo se entra directo a desarrollo');
+  check(await page.evaluate(() => location.pathname === '/desarrollo'), 'eligiendo desarrollo se entra a desarrollo');
+  // Pestaña nueva (sin elección guardada): abrir la página vuelve a preguntar
+  await page.evaluate(() => sessionStorage.clear());
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle2' });
+  await page.waitForFunction(() => location.pathname === '/elegir', { timeout: 10000 }).catch(() => {});
+  check(await page.evaluate(() => location.pathname === '/elegir'), 'al abrir la página en una pestaña nueva se elige el estudio');
   await page.screenshot({ path: path.join(OUT, 's10-movil-desarrollo.png') });
 
   console.log(errors.length ? 'ERRORES:\n' + [...new Set(errors)].join('\n') : 'Sin errores de JS');
