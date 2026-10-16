@@ -29,6 +29,7 @@ Sistema de gestión para el estudio de arquitectura **RF** de Paysandú, Uruguay
   - La migración `20261016000001_desarrollo.sql` y las 11 casas del mapa de RF_studio (`sistema/supabase/datos-reales/desarrollo-casas-rfm.sql`, en `.gitignore`, solo en la segunda computadora) ya se ejecutaron en Supabase el 16-10-2026. Faltan cargar inquilinos, contratos, direcciones y los terrenos baldíos.
   - Dar acceso a otra persona: crearla en *Authentication → Users* y en el SQL Editor `update profiles set desarrollo = 'colaborador', arquitectura = false where email = '…'` (solo desarrollo) o `desarrollo = 'admin'`.
   - El proyecto de Supabase `rfm-alquileres` es la página pública de reservas de RF_studio (https://github.com/MatiasFaust/RF_studio). Sigue sin tocarse.
+- Acceso directo "Estudio RF" (Escritorio y menú Inicio, ventana propia de Edge con `--app`): se crea con `powershell -ExecutionPolicy Bypass -File tools\crear-acceso-directo.ps1`. El ícono queda en `%LOCALAPPDATA%\EstudioRF\estudio-rf.ico`. La barra de tareas toma el ícono de la página (favicon), que todavía es el genérico de Next.js.
 - Hay una segunda computadora preparada (proyecto en el Escritorio, con Git, Node, `vercel link` y `.env.local`). `datos-reales/` sigue estando solo en la PC de escritorio.
 - Las 3 obras reales del estudio ya están cargadas en Supabase. El SQL original está en `sistema/supabase/datos-reales/`, que está en `.gitignore` y existe solo en la PC de escritorio.
 
