@@ -44,6 +44,7 @@ Sistema de gestión para el estudio de arquitectura **RF** de Paysandú, Uruguay
 - shadcn usa **Base UI**, no Radix: se usa `render={<Button/>}` en lugar de `asChild`. `CommandDialog` no incluye `<Command>`, así que hay que envolverlo a mano. `Select` necesita la prop `items` para mostrar etiquetas. El paquete npm `cn` es oficial de shadcn.
 - Seguridad: RLS + funciones `security definer` en las migraciones. `src/lib/permissions.ts` solo replica las reglas para la interfaz.
 - Sin `.env.local`, la app corre en **modo demo** (datos ficticios en localStorage) con la misma interfaz `Repo` (`src/lib/data/`).
+- Colores (inspirados en el Instagram @rf.estudioarq): grises fríos con el gris azulado del logo RF en `src/app/globals.css`. En el estudio de desarrollo, `AppShell` pone `data-area="desarrollo"` en `<html>` y el color principal pasa al azul oscuro del logo [rf].
 - Las fechas por defecto van en hora local (`date-fns format`), no con `toISOString()`: en Uruguay, después de las 21 horas, UTC ya es el día siguiente.
 
 ## Comprobaciones
