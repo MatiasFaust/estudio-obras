@@ -5,6 +5,7 @@
 #   powershell -ExecutionPolicy Bypass -File tools\crear-acceso-directo.ps1
 #
 # Se puede ejecutar las veces que haga falta: vuelve a crear el ícono y los accesos.
+# Si el acceso directo muestra una hoja en blanco, ejecutarlo de nuevo lo arregla.
 # No guarda datos personales: todo queda en la carpeta del usuario de Windows.
 
 param(
@@ -38,7 +39,7 @@ Write-Host "Edge: $edge"
 $Logo = (Resolve-Path $Logo).Path
 $carpeta = Join-Path $env:LOCALAPPDATA "EstudioRF"
 New-Item -ItemType Directory -Force $carpeta | Out-Null
-$ico = Join-Path $carpeta "estudio-rf.ico"
+$temporal = Join-Path $carpeta "estudio-rf.tmp"
 
 Add-Type -AssemblyName System.Drawing
 
@@ -97,7 +98,7 @@ $entradas = foreach ($n in $tamanos) {
 }
 $src.Dispose()
 
-$fs = [System.IO.File]::Create($ico)
+$fs = [System.IO.File]::Create($temporal)
 $w = New-Object System.IO.BinaryWriter $fs
 $w.Write([int16]0); $w.Write([int16]1); $w.Write([int16]$entradas.Count)   # ICONDIR
 $offset = 6 + 16 * $entradas.Count
@@ -109,7 +110,15 @@ foreach ($e in $entradas) {                                                # ICO
 }
 foreach ($e in $entradas) { $w.Write([byte[]]$e.Datos) }
 $w.Close()
-if ((Get-Item $ico).Length -lt 10000) { throw "El ícono quedó vacío o incompleto: $ico" }
+if ((Get-Item $temporal).Length -lt 10000) { throw "El ícono quedó vacío o incompleto: $temporal" }
+
+# Windows guarda los íconos en memoria según el nombre del archivo: si el ícono cambia y se
+# llama igual, puede seguir mostrando el viejo (por ejemplo, una hoja en blanco). Por eso el
+# nombre lleva una marca del contenido, y se borran las versiones anteriores.
+$marca = (Get-FileHash $temporal -Algorithm SHA256).Hash.Substring(0, 8).ToLower()
+$ico = Join-Path $carpeta "estudio-rf-$marca.ico"
+Get-ChildItem $carpeta -Filter "estudio-rf*.ico" | Where-Object { $_.FullName -ne $ico } | Remove-Item -Force
+Move-Item -Force $temporal $ico
 Write-Host "Ícono: $ico ($($tamanos -join ', ') px)"
 
 # --- 3. Accesos directos ----------------------------------------------------
@@ -128,6 +137,12 @@ foreach ($lnk in $destinos) {
   $s.Save()
   Write-Host "Acceso directo: $lnk"
 }
+
+# Pedirle a Windows que vuelva a leer los íconos del Escritorio y del menú Inicio
+$ie4 = Join-Path $env:WINDIR "System32\ie4uinit.exe"
+if (Test-Path $ie4) { & $ie4 -show }
+Add-Type -Namespace EstudioRF -Name Shell -MemberDefinition '[DllImport("shell32.dll")] public static extern void SHChangeNotify(int e, int f, IntPtr a, IntPtr b);'
+[EstudioRF.Shell]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)  # SHCNE_ASSOCCHANGED
 
 Write-Host ""
 Write-Host "Listo. Abrí '$Nombre' desde el Escritorio o el menú Inicio." -ForegroundColor Green
