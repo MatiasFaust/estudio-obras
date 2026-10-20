@@ -212,7 +212,7 @@ async function logout(page) {
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
   await sleep(1000);
   const pagosTxt = await page.$eval('main', (e) => e.textContent);
-  check(pagosTxt.includes('Presupuestos') && pagosTxt.includes('Vivienda Acosta') && pagosTxt.includes('Creada el') && !pagosTxt.includes('US$'), 'presupuestos: listado con fecha de creación y sin montos');
+  check(pagosTxt.includes('Nuevo presupuesto') && pagosTxt.includes('2094') && pagosTxt.includes('Vivienda Acosta') && !pagosTxt.includes('Creada el'), 'menú Presupuestos: solo los presupuestos, con "Nuevo presupuesto"');
   await page.goto(`${BASE}/obras/p1`, { waitUntil: 'networkidle2' });
   await sleep(1000);
   const resumenTxt = await page.$eval('main', (e) => e.textContent);
@@ -274,6 +274,32 @@ async function logout(page) {
   await page.goto(`${BASE}/pagos/plantilla`, { waitUntil: 'networkidle2' });
   await page.waitForSelector('#tp-name', { timeout: 10000 });
   check((await page.$eval('#tp-name', (e) => e.value)) === 'Estudio Prueba', 'plantilla: se guarda y se vuelve a cargar');
+  // Nuevo presupuesto desde el menú, eligiendo la obra; al aceptarlo pasa a ser el monto acordado
+  await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
+  await sleep(800);
+  check((await page.$eval('main', (e) => e.textContent)).includes('2095'), 'menú Presupuestos: aparece el presupuesto recién creado');
+  await clickText(page, 'button', 'Nuevo presupuesto');
+  await sleep(500);
+  await page.click('[role=dialog] [aria-label="Obra"]');
+  await sleep(400);
+  await clickText(page, '[role=option]', 'Reforma Casa Silva');
+  await sleep(300);
+  await clickText(page, '[role=dialog] button[type=submit]', 'Armar presupuesto');
+  await page.waitForSelector('#bg-number', { timeout: 10000 });
+  await sleep(500);
+  await page.type('#bg-number', '2097');
+  await page.type('#bg-price', '400.000');
+  await page.click('[aria-label="Estado"]');
+  await sleep(400);
+  await clickText(page, '[role=option]', 'Aceptado');
+  await sleep(300);
+  await clickText(page, 'button', 'Guardar');
+  await sleep(1500);
+  await page.goto(`${BASE}/obras/p3?tab=pagos`, { waitUntil: 'networkidle2' });
+  await sleep(1200);
+  const p3 = await page.$eval('main', (e) => e.textContent);
+  check(p3.includes('Monto acordado$ 400.000,00') && p3.includes('Según el presupuesto 2097, aceptado.'), 'presupuesto aceptado → monto acordado de la obra ($ 400.000)');
+  check(p3.includes('Pagos recibidos') && p3.includes('Presupuestos de esta obra') && p3.includes('2097'), 'la obra muestra el avance de pagos y sus presupuestos juntos');
 
   // --- Estudio de desarrollo (administradora de los dos estudios)
   check(!!(await page.$('nav[aria-label="Área"]')), 'botones de los dos estudios visibles arriba');

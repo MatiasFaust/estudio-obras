@@ -39,7 +39,7 @@ function BudgetEditorPage() {
   const project = projects.data?.find((p) => p.id === id);
   const budget = presupuesto === "nuevo" ? null : budgets.data?.find((b) => b.id === presupuesto && b.project_id === id);
   if (!project || !settings.data || (presupuesto !== "nuevo" && !budget)) {
-    return <EmptyState icon={FileText} title="Presupuesto no encontrado" action={<Link href={`/obras/${id}?tab=presupuestos`} className="text-sm text-primary">Volver a la obra</Link>} />;
+    return <EmptyState icon={FileText} title="Presupuesto no encontrado" action={<Link href="/pagos" className="text-sm text-primary">Volver a presupuestos</Link>} />;
   }
   const client = clients.data?.find((c) => c.id === project.client_id);
   return <BudgetForm key={budget?.updated_at ?? "nuevo"} project={project} client={client} settings={settings.data} budget={budget ?? null} />;
@@ -115,9 +115,11 @@ function BudgetForm({ project, client, settings, budget }: { project: Project; c
 
   return (
     <div className="grid max-w-3xl gap-4">
-      <Link href={`/obras/${project.id}?tab=presupuestos`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-3.5" /> {project.name}
-      </Link>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <Link href="/pagos" className="inline-flex items-center gap-1 hover:text-foreground"><ArrowLeft className="size-3.5" /> Presupuestos</Link>
+        <span aria-hidden>·</span>
+        <Link href={`/obras/${project.id}?tab=pagos`} className="hover:text-foreground">{project.name}</Link>
+      </div>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{budget ? `Presupuesto ${budget.number || "sin número"}` : "Nuevo presupuesto"}</h1>
@@ -242,7 +244,7 @@ function BudgetForm({ project, client, settings, budget }: { project: Project; c
           description="Se borra de la obra. Esta acción no se puede deshacer."
           onConfirm={async () => {
             const ok = await run(() => repo.deleteBudget(budget.id), "Presupuesto eliminado");
-            if (ok) router.replace(`/obras/${project.id}?tab=presupuestos`);
+            if (ok) router.replace("/pagos");
             return ok;
           }}
         />

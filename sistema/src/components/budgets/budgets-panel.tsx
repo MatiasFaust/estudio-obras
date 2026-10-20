@@ -14,7 +14,7 @@ import { downloadBudgetPdf } from "./budget-pdf";
 import { BudgetStatusBadge } from "./budget-status";
 import { money } from "./budget-text";
 
-/** Pestaña "Presupuestos" de la obra (solo administradores) */
+/** Presupuestos de la obra, debajo del avance de pagos (solo administradores) */
 export function BudgetsPanel({ project }: { project: Project }) {
   const budgets = useBudgets(true);
   const settings = useBudgetSettings(true);
@@ -34,7 +34,10 @@ export function BudgetsPanel({ project }: { project: Project }) {
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">Presupuestos guardados de esta obra. Se descargan en PDF con la plantilla del estudio.</p>
+        <div>
+          <h2 className="text-sm font-medium">Presupuestos de esta obra ({own.length})</h2>
+          <p className="text-xs text-muted-foreground">Al marcar uno como “Aceptado”, su precio pasa a ser el monto acordado de arriba.</p>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/pagos/plantilla" className={buttonVariants({ variant: "ghost", size: "sm" })}><Settings2 /> Plantilla</Link>
           <Link href={`/obras/${project.id}/presupuestos/nuevo`} className={buttonVariants({ size: "sm" })}><FilePlus2 /> Nuevo presupuesto</Link>
@@ -43,7 +46,7 @@ export function BudgetsPanel({ project }: { project: Project }) {
       {budgets.isLoading ? (
         <p className="text-sm text-muted-foreground">Cargando…</p>
       ) : own.length === 0 ? (
-        <EmptyState icon={FileText} title="Todavía no hay presupuestos para esta obra" />
+        <EmptyState icon={FileText} title="Todavía no hay presupuestos para esta obra" description="Armalo con “Nuevo presupuesto” y descargalo en PDF." />
       ) : (
         <Card size="sm">
           <CardContent className="overflow-x-auto">

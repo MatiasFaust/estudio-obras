@@ -179,6 +179,11 @@ check(budget.status === 'borrador', 'presupuesto nuevo queda como borrador');
 await as(ADMIN, `update budgets set status = 'aceptado' where id = '${budget.id}'`);
 check((await as(ADMIN, `select summary from activity_log where entity_id = '${budget.id}' order by id`)).rows.some((r) => r.summary.includes('2094') && r.summary.includes('aceptado')), 'historial registra el presupuesto y su estado');
 check(!!(await fails_(ADMIN, `insert into budgets (project_id, price) values ('${budgetProj}', -1)`)), 'rechaza precios negativos');
+// El presupuesto aceptado (2094, $ 102.000) pasa a ser el monto acordado de la obra
+const fin = (await db.query(`select agreed_amount::float as a, currency, notes from project_finances where project_id = '${budgetProj}'`)).rows[0];
+check(fin && fin.a === 102000 && fin.currency === 'UYU' && fin.notes.includes('2094'), `presupuesto aceptado → monto acordado de la obra (${fin ? fin.a + ' ' + fin.currency : 'sin monto'})`);
+await as(ADMIN, `insert into budgets (project_id, number, price, status) values ('${budgetProj}', '2096', 150000, 'borrador')`);
+check((await db.query(`select agreed_amount::float as a from project_finances where project_id = '${budgetProj}'`)).rows[0].a === 102000, 'un presupuesto en borrador no cambia el monto acordado');
 check(!!(await fails_(ADMIN, `insert into budgets (project_id, includes) values ('${budgetProj}', '{"no":"lista"}')`)), 'lo que incluye tiene que ser una lista');
 check((await as(ARQ, `select id from budgets`)).rows.length === 0, 'arquitecto NO ve presupuestos');
 check(!!(await fails_(ARQ, `insert into budgets (project_id) values ('${budgetProj}')`)), 'arquitecto NO crea presupuestos');

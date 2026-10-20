@@ -3,7 +3,7 @@ import { convertAmount, formatMoney } from "../format";
 import { isLeaseActive, leaseLastDay } from "../dev";
 import { hasArq, isAdmin, isDevAdmin, isDevMember, isStaff } from "../permissions";
 import type {
-  Activity, Budget, Client, Currency, DevLease, DevProperty, DevTenant, Note, Payment, Profile, Project, ProjectStatus, Stage,
+  Activity, Budget, Client, Currency, DevLease, DevProperty, DevTenant, FinanceInput, Note, Payment, Profile, Project, ProjectStatus, Stage,
 } from "../types";
 import { createBudgetDemoData, createDemoData, createDevDemoData, DEMO_PROFILES, type DemoDB } from "./demo-seed";
 import { RepoError, type Repo } from "./repo";
@@ -88,6 +88,40 @@ function requireUser(db: DemoDB): Profile {
 function canAccessProject(db: DemoDB, user: Profile, projectId: string | null): boolean {
   if (!projectId || !hasArq(user)) return false;
   return isStaff(user) || db.members.some((m) => m.project_id === projectId && m.user_id === user.id);
+}
+
+/** Monto acordado de una obra (lo usan setFinance y los presupuestos aceptados) */
+function writeFinance(db: DemoDB, user: Profile, projectId: string, input: FinanceInput) {
+  const p = findProject(db, projectId);
+  const existing = db.finances.find((f) => f.project_id === projectId);
+  const currencyChanged = existing && existing.currency !== input.currency;
+  if (currencyChanged || !existing) {
+    // Igual que la base: si un pago está en otra moneda y no tiene cotización, no se puede convertir
+    for (const pay of db.payments.filter((x) => x.project_id === projectId)) {
+      paymentInContract(pay.amount, pay.currency, pay.exchange_rate, input.currency);
+    }
+  }
+  if (existing) Object.assign(existing, input, { updated_at: now() });
+  else db.finances.push({ project_id: projectId, ...input, updated_at: now() });
+  if (currencyChanged || !existing) {
+    for (const pay of db.payments.filter((x) => x.project_id === projectId)) {
+      pay.amount_contract = paymentInContract(pay.amount, pay.currency, pay.exchange_rate, input.currency);
+    }
+  }
+  log(db, user, {
+    entity_type: "payment", entity_id: projectId, project_id: projectId, action: "agreed",
+    summary: `fijó el monto acordado de ${label(p)} en ${input.agreed_amount === null ? "sin monto" : formatMoney(input.agreed_amount, input.currency)}`,
+  });
+}
+
+/** Presupuesto aceptado → su precio pasa a ser el monto acordado de la obra */
+function acceptBudget(db: DemoDB, user: Profile, b: Budget) {
+  if (b.status !== "aceptado" || b.price === null) return;
+  writeFinance(db, user, b.project_id, {
+    agreed_amount: b.price,
+    currency: b.currency,
+    notes: b.number ? `Según el presupuesto ${b.number}, aceptado.` : "Según el presupuesto aceptado.",
+  });
 }
 
 const budgetLabel = (b: Pick<Budget, "number">) => (b.number ? `el presupuesto ${b.number}` : "un presupuesto");
@@ -539,20 +573,7 @@ export function createDemoRepo(): Repo {
       const db = load();
       const user = requireUser(db);
       if (!isAdmin(user)) deny();
-      const p = findProject(db, projectId);
-      const existing = db.finances.find((f) => f.project_id === projectId);
-      const currencyChanged = existing && existing.currency !== input.currency;
-      if (existing) Object.assign(existing, input, { updated_at: now() });
-      else db.finances.push({ project_id: projectId, ...input, updated_at: now() });
-      if (currencyChanged || !existing) {
-        for (const pay of db.payments.filter((x) => x.project_id === projectId)) {
-          pay.amount_contract = paymentInContract(pay.amount, pay.currency, pay.exchange_rate, input.currency);
-        }
-      }
-      log(db, user, {
-        entity_type: "payment", entity_id: projectId, project_id: projectId, action: "agreed",
-        summary: `fijó el monto acordado de ${label(p)} en ${input.agreed_amount === null ? "sin monto" : formatMoney(input.agreed_amount, input.currency)}`,
-      });
+      writeFinance(db, user, projectId, input);
       save(db);
     },
     async listPayments() {
@@ -612,6 +633,7 @@ export function createDemoRepo(): Repo {
       checkBudget(input);
       const b: Budget = { ...input, id: uid(), created_by: user.id, created_at: now(), updated_at: now() };
       db.budgets.push(b);
+      acceptBudget(db, user, b);
       log(db, user, { entity_type: "payment", entity_id: b.id, project_id: p.id, action: "created", summary: `creó ${budgetLabel(b)} en ${label(p)}` });
       save(db);
       return b;
@@ -626,6 +648,7 @@ export function createDemoRepo(): Repo {
       checkBudget(next);
       const statusChanged = input.status !== undefined && input.status !== b.status;
       Object.assign(b, next);
+      acceptBudget(db, user, b);
       if (statusChanged) {
         const p = findProject(db, b.project_id);
         log(db, user, { entity_type: "payment", entity_id: id, project_id: p.id, action: "updated", summary: `marcó ${budgetLabel(b)} de ${label(p)} como ${b.status}` });

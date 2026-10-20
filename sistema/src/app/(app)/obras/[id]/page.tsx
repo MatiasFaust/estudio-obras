@@ -30,7 +30,7 @@ import { formatDate, formatMoney, googleMapsUrl, isOverdue } from "@/lib/format"
 import { can } from "@/lib/permissions";
 import type { ProjectStatus } from "@/lib/types";
 
-const TABS = ["resumen", "etapas", "notas", "presupuestos", "pagos", "historial"] as const;
+const TABS = ["resumen", "etapas", "notas", "pagos", "historial"] as const;
 const STATUS_OPTIONS = SELECTABLE_STATUS.map((s) => ({ value: s, label: STATUS[s].label }));
 
 function Info({ label, children }: { label: string; children: React.ReactNode }) {
@@ -59,7 +59,9 @@ function ProjectDetail() {
   const payments = usePayments(showFinances);
   const [confirm, setConfirm] = useState<"archive" | "delete" | null>(null);
 
-  const initialTab = TABS.find((t) => t === search.get("tab")) ?? "resumen";
+  // "presupuestos" era una pestaña aparte; ahora está junto con los pagos
+  const requested = search.get("tab") === "presupuestos" ? "pagos" : search.get("tab");
+  const initialTab = TABS.find((t) => t === requested) ?? "resumen";
   const [tab, setTab] = useState<string>(initialTab);
 
   const project = projects.data?.find((p) => p.id === id);
@@ -144,8 +146,7 @@ function ProjectDetail() {
           <TabsTrigger value="resumen">Resumen</TabsTrigger>
           <TabsTrigger value="etapas">Etapas y avance</TabsTrigger>
           <TabsTrigger value="notas">Notas{openNotes ? ` (${openNotes})` : ""}</TabsTrigger>
-          {can.viewFinances(profile) && <TabsTrigger value="presupuestos">Presupuestos</TabsTrigger>}
-          {can.viewFinances(profile) && <TabsTrigger value="pagos">Pagos</TabsTrigger>}
+          {can.viewFinances(profile) && <TabsTrigger value="pagos">Presupuesto y pagos</TabsTrigger>}
           <TabsTrigger value="historial">Historial</TabsTrigger>
         </TabsList>
 
@@ -217,8 +218,12 @@ function ProjectDetail() {
 
         <TabsContent value="etapas"><StagesPanel project={project} /></TabsContent>
         <TabsContent value="notas"><NotesPanel projectId={project.id} /></TabsContent>
-        {can.viewFinances(profile) && <TabsContent value="presupuestos"><BudgetsPanel project={project} /></TabsContent>}
-        {can.viewFinances(profile) && <TabsContent value="pagos"><PaymentsPanel project={project} /></TabsContent>}
+        {can.viewFinances(profile) && (
+          <TabsContent value="pagos" className="grid gap-6">
+            <PaymentsPanel project={project} />
+            <BudgetsPanel project={project} />
+          </TabsContent>
+        )}
         <TabsContent value="historial">
           <Card size="sm"><CardContent><ActivityList projectId={project.id} limit={100} /></CardContent></Card>
         </TabsContent>

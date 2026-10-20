@@ -1,120 +1,175 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Banknote, Lock, Search, Settings2 } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Download, FilePlus2, FileText, Lock, Search, Settings2 } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/common/empty-state";
+import { Field } from "@/components/common/field";
 import { PageHeader } from "@/components/common/page-header";
 import { SimpleSelect } from "@/components/common/simple-select";
-import { StatusBadge } from "@/components/common/status-badge";
-import { summarize } from "@/components/payments/summary";
-import { SELECTABLE_STATUS, STATUS } from "@/lib/constants";
-import { useClients, useFinances, usePayments, useProfiles, useProjects, useSession } from "@/lib/data/hooks";
+import { downloadBudgetPdf } from "@/components/budgets/budget-pdf";
+import { BUDGET_STATUS, BudgetStatusBadge } from "@/components/budgets/budget-status";
+import { money } from "@/components/budgets/budget-text";
+import { useBudgets, useBudgetSettings, useClients, useProjects, useSession } from "@/lib/data/hooks";
 import { formatDate, matches } from "@/lib/format";
 import { can } from "@/lib/permissions";
+import type { Budget } from "@/lib/types";
 
-const STATUS_FILTER = [{ value: "", label: "Todos los estados" }].concat(SELECTABLE_STATUS.map((s) => ({ value: s, label: STATUS[s].label })));
+const STATUS_FILTER = [{ value: "", label: "Todos los estados" }].concat(
+  Object.entries(BUDGET_STATUS).map(([value, s]) => ({ value, label: s.label })),
+);
 
-/** Listado de presupuestos: los montos se ven al entrar a cada obra (pestaña Pagos) */
+/** Presupuestos: el creador de presupuestos (todas las obras) */
 export default function BudgetsPage() {
+  const router = useRouter();
   const { profile } = useSession();
   const allowed = can.viewFinances(profile);
+  const budgets = useBudgets(allowed);
+  const settings = useBudgetSettings(allowed);
   const projects = useProjects();
   const clients = useClients();
-  const profiles = useProfiles();
-  const finances = useFinances(allowed);
-  const payments = usePayments(allowed);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
-  const [responsible, setResponsible] = useState("");
-  const [onlyPending, setOnlyPending] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  const [projectId, setProjectId] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
 
+  const projectById = useMemo(() => new Map((projects.data ?? []).map((p) => [p.id, p])), [projects.data]);
   const clientName = useMemo(() => new Map((clients.data ?? []).map((c) => [c.id, c.name])), [clients.data]);
-  const personName = useMemo(() => new Map((profiles.data ?? []).map((p) => [p.id, p.full_name])), [profiles.data]);
-  const responsibleFilter = [{ value: "", label: "Todos los responsables" }].concat(
-    (profiles.data ?? []).filter((p) => p.role !== "colaborador").map((p) => ({ value: p.id, label: p.full_name })),
-  );
 
   if (!allowed) {
     return <EmptyState icon={Lock} title="Sin permiso" description="Los presupuestos son solo para administradores." />;
   }
 
-  const all = (projects.data ?? [])
-    .map((p) => {
-      const own = (payments.data ?? []).filter((x) => x.project_id === p.id);
-      const finance = finances.data?.find((f) => f.project_id === p.id);
-      return { project: p, summary: summarize(finance, own), hasData: !!finance || own.length > 0 };
-    })
-    .filter((r) => r.hasData || r.project.status !== "archivada");
+  const clientOf = (b: Budget) => {
+    const p = projectById.get(b.project_id);
+    return p?.client_id ? clientName.get(p.client_id) ?? "" : "";
+  };
+  const all = budgets.data ?? [];
+  const rows = all.filter((b) => {
+    const p = projectById.get(b.project_id);
+    return (!status || b.status === status) && matches(query, b.number, b.recipient, p?.name, p?.code, clientOf(b));
+  });
+  const openProjects = (projects.data ?? []).filter((p) => p.status !== "archivada");
 
-  const rows = all
-    .filter(({ project: p, summary: s }) =>
-      (!status || p.status === status) &&
-      (!responsible || p.responsible_id === responsible) &&
-      (!onlyPending || (s.balance ?? 0) > 0) &&
-      matches(query, p.name, p.code, p.address, p.locality, p.padron, p.client_id ? clientName.get(p.client_id) : ""),
-    )
-    .sort((a, b) => b.project.created_at.localeCompare(a.project.created_at));
+  async function download(b: Budget) {
+    if (!settings.data) return;
+    setBusy(b.id);
+    try {
+      await downloadBudgetPdf(b, settings.data);
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <>
       <PageHeader
         title="Presupuestos"
-        description={`${rows.length} de ${all.length} obras · tocá una obra para ver y armar sus presupuestos`}
-        actions={<Link href="/pagos/plantilla" className={buttonVariants({ variant: "outline" })}><Settings2 /> Plantilla</Link>}
+        description={`${rows.length} de ${all.length} presupuestos`}
+        actions={
+          <>
+            <Link href="/pagos/plantilla" className={buttonVariants({ variant: "outline" })}><Settings2 /> Plantilla</Link>
+            <Button onClick={() => setChoosing(true)}><FilePlus2 /> Nuevo presupuesto</Button>
+          </>
+        }
       />
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-72">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nombre, padrón, dirección, cliente…" className="pl-8" aria-label="Buscar obras" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Número, obra, cliente…" className="pl-8" aria-label="Buscar presupuestos" />
         </div>
-        <SimpleSelect value={status} onChange={setStatus} options={STATUS_FILTER} className="w-44" aria-label="Filtrar por estado" />
-        <SimpleSelect value={responsible} onChange={setResponsible} options={responsibleFilter} className="w-48" aria-label="Filtrar por responsable" />
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Checkbox checked={onlyPending} onCheckedChange={setOnlyPending} /> Solo con saldo pendiente
-        </label>
+        <SimpleSelect value={status} onChange={setStatus} options={STATUS_FILTER} placeholder="Todos los estados" className="w-44" aria-label="Filtrar por estado" />
       </div>
 
-      {projects.isLoading || finances.isLoading || payments.isLoading ? (
+      {budgets.isLoading || projects.isLoading ? (
         <p className="py-8 text-sm text-muted-foreground">Cargando presupuestos…</p>
       ) : rows.length === 0 ? (
-        <EmptyState icon={Banknote} title={all.length ? "Ninguna obra coincide con los filtros" : "Todavía no hay obras registradas"} />
+        <EmptyState
+          icon={FileText}
+          title={all.length ? "Ningún presupuesto coincide con la búsqueda" : "Todavía no hay presupuestos"}
+          action={!all.length && <Button onClick={() => setChoosing(true)}><FilePlus2 /> Nuevo presupuesto</Button>}
+        />
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Número</TableHead>
                 <TableHead>Obra</TableHead>
-                <TableHead className="hidden md:table-cell">Padrón</TableHead>
                 <TableHead className="hidden md:table-cell">Cliente</TableHead>
+                <TableHead className="hidden sm:table-cell">Fecha</TableHead>
+                <TableHead className="text-right">Precio</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead className="hidden lg:table-cell">Responsable</TableHead>
+                <TableHead className="w-20" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map(({ project: p }) => (
-                <TableRow key={p.id}>
-                  <TableCell className="max-w-72">
-                    <Link href={`/obras/${p.id}?tab=presupuestos`} className="block hover:underline">
-                      <span className="block truncate font-medium">{p.name}</span>
-                      <span className="block truncate text-xs text-muted-foreground">Creada el {formatDate(p.created_at)}</span>
-                    </Link>
-                  </TableCell>
-                  <TableCell className="hidden text-muted-foreground md:table-cell">{p.padron || "—"}</TableCell>
-                  <TableCell className="hidden text-muted-foreground md:table-cell">{p.client_id ? clientName.get(p.client_id) ?? "—" : "—"}</TableCell>
-                  <TableCell><StatusBadge status={p.status} /></TableCell>
-                  <TableCell className="hidden text-muted-foreground lg:table-cell">{p.responsible_id ? personName.get(p.responsible_id) ?? "—" : "—"}</TableCell>
-                </TableRow>
-              ))}
+              {rows.map((b) => {
+                const p = projectById.get(b.project_id);
+                return (
+                  <TableRow key={b.id}>
+                    <TableCell>
+                      <Link href={`/obras/${b.project_id}/presupuestos/${b.id}`} className="font-medium hover:underline">{b.number || "Sin número"}</Link>
+                    </TableCell>
+                    <TableCell className="max-w-56">
+                      <Link href={`/obras/${b.project_id}?tab=pagos`} className="block truncate hover:underline">{p?.name ?? "—"}</Link>
+                    </TableCell>
+                    <TableCell className="hidden text-muted-foreground md:table-cell">{clientOf(b) || b.recipient || "—"}</TableCell>
+                    <TableCell className="hidden text-muted-foreground sm:table-cell">{formatDate(b.issued_on)}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap tabular-nums">{b.price !== null ? money(b.price, b.currency) : "—"}</TableCell>
+                    <TableCell><BudgetStatusBadge status={b.status} /></TableCell>
+                    <TableCell className="text-right">
+                      <Button size="sm" variant="outline" disabled={busy === b.id || !settings.data} onClick={() => download(b)}>
+                        <Download /> PDF
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
       )}
+
+      <Dialog open={choosing} onOpenChange={setChoosing}>
+        <DialogContent>
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (projectId) router.push(`/obras/${projectId}/presupuestos/nuevo`);
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Nuevo presupuesto</DialogTitle>
+              <DialogDescription>Elegí la obra. El presupuesto arranca con la plantilla y los datos de la obra (cliente y padrón).</DialogDescription>
+            </DialogHeader>
+            <Field label="Obra">
+              <SimpleSelect
+                value={projectId}
+                onChange={setProjectId}
+                aria-label="Obra"
+                placeholder="Elegí una obra"
+                options={openProjects.map((p) => ({ value: p.id, label: `${p.name}${p.client_id && clientName.get(p.client_id) ? ` · ${clientName.get(p.client_id)}` : ""}` }))}
+              />
+            </Field>
+            {openProjects.length === 0 && (
+              <p className="text-sm text-muted-foreground">Primero creá la obra en <Link href="/obras/nueva" className="text-primary hover:underline">Obras</Link>.</p>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setChoosing(false)}>Cancelar</Button>
+              <Button type="submit" disabled={!projectId}>Armar presupuesto</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
