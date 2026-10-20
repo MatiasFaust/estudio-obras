@@ -191,6 +191,10 @@ check((await as(ARQ, `select id from budget_settings`)).rows.length === 0, 'arqu
 await as(ADMIN, `update budget_settings set studio_name = 'Estudio SQL', signers = '[{"name":"Firma","title":"Arq.","image":"data:image/png;base64,AAAA"}]'`);
 check((await as(ADMIN, `select studio_name from budget_settings`)).rows[0].studio_name === 'Estudio SQL', 'administrador edita la plantilla');
 check(!!(await fails_(ADMIN, `insert into budget_settings (id) values (false)`)), 'la plantilla es una sola');
+await as(ADMIN, `update budget_settings set calc_types = '[{"name":"Reforma","fee_per_m2":1200,"wages_per_m2":1.5,"build_cost_per_m2":null}]', wage_value = 2200, expenses_fixed = 15000`);
+const calc = (await as(ADMIN, `select calc_types, wage_value::float as w, iva_rate::float as iva from budget_settings`)).rows[0];
+check(calc.calc_types[0].name === 'Reforma' && calc.w === 2200 && calc.iva === 22, 'calculadora: valores guardados en la plantilla (IVA 22% por defecto)');
+check(!!(await fails_(ADMIN, `update budget_settings set iva_rate = 150`)), 'calculadora: rechaza un IVA mayor a 100%');
 
 // --- Estudio de desarrollo
 const DEVCOLAB = '00000000-0000-0000-0000-000000000004';

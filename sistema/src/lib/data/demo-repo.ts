@@ -39,9 +39,13 @@ function load(): DemoDB {
         }
         localStorage.setItem(DB_KEY, JSON.stringify(db));
       }
-      // ...y antes de existir los presupuestos en PDF
+      // ...y antes de existir los presupuestos en PDF y su calculadora
       if (!db.budgets) {
         Object.assign(db, createBudgetDemoData());
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+      } else if (!db.budgetSettings.calc_types) {
+        const { calc_types, wage_value, expenses_fixed, expenses_per_m2, iva_rate } = createBudgetDemoData().budgetSettings;
+        Object.assign(db.budgetSettings, { calc_types, wage_value, expenses_fixed, expenses_per_m2, iva_rate });
         localStorage.setItem(DB_KEY, JSON.stringify(db));
       }
       return db;

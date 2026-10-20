@@ -325,6 +325,15 @@ export function createBudgetDemoData(): Pick<DemoDB, "budgets" | "budgetSettings
       lines: ["@estudio.demo", "099 000 000", "estudio@demo.local"],
       partners: [{ name: "Paisajismo Demo", lines: ["@paisajismo.demo", "paisajismo@demo.local"], logo: null }],
     },
+    calc_types: [
+      { name: "Obra nueva", fee_per_m2: 1500, wages_per_m2: 6, build_cost_per_m2: 45000 },
+      { name: "Reforma", fee_per_m2: 1200, wages_per_m2: 1.5, build_cost_per_m2: 25000 },
+      { name: "Regularización", fee_per_m2: 600, wages_per_m2: null, build_cost_per_m2: null },
+    ],
+    wage_value: 2200,
+    expenses_fixed: 15000,
+    expenses_per_m2: 150,
+    iva_rate: 22,
     updated_at: stamp(-30),
   };
   const budgets: Budget[] = [{

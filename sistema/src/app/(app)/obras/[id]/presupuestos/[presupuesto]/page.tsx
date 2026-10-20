@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { ArrowLeft, Download, Eye, FileText, Lock, Settings2, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { SimpleSelect } from "@/components/common/simple-select";
 import { downloadBudgetPdf, previewBudgetPdf } from "@/components/budgets/budget-pdf";
 import { BUDGET_STATUS } from "@/components/budgets/budget-status";
 import { fillIntro, defaultTrabajo, IVA_LABEL, newBudgetFrom } from "@/components/budgets/budget-text";
+import { readPrefill, type CalcPrefill } from "@/components/budgets/calculator";
 import { linesToText, numText, parseOptional, PaymentTermsEditor, textToLines } from "@/components/budgets/form-parts";
 import { CURRENCIES } from "@/lib/constants";
 import { useAction, useBudgets, useBudgetSettings, useClients, useProjects, useRepo, useSession } from "@/lib/data/hooks";
@@ -27,6 +28,7 @@ const STATUS_OPTIONS = Object.entries(BUDGET_STATUS).map(([value, s]) => ({ valu
 
 function BudgetEditorPage() {
   const { id, presupuesto } = useParams<{ id: string; presupuesto: string }>();
+  const search = useSearchParams();
   const { profile } = useSession();
   const allowed = can.viewFinances(profile);
   const projects = useProjects();
@@ -42,21 +44,38 @@ function BudgetEditorPage() {
     return <EmptyState icon={FileText} title="Presupuesto no encontrado" action={<Link href="/pagos" className="text-sm text-primary">Volver a presupuestos</Link>} />;
   }
   const client = clients.data?.find((c) => c.id === project.client_id);
-  return <BudgetForm key={budget?.updated_at ?? "nuevo"} project={project} client={client} settings={settings.data} budget={budget ?? null} />;
+  // Lo calculado en la calculadora llega por la dirección (solo en un presupuesto nuevo)
+  const prefill = budget ? null : readPrefill(search);
+  return <BudgetForm key={budget?.updated_at ?? "nuevo"} project={project} client={client} settings={settings.data} budget={budget ?? null} prefill={prefill} />;
 }
 
-function BudgetForm({ project, client, settings, budget }: { project: Project; client?: Client; settings: BudgetSettings; budget: Budget | null }) {
+function BudgetForm({
+  project, client, settings, budget, prefill,
+}: { project: Project; client?: Client; settings: BudgetSettings; budget: Budget | null; prefill: CalcPrefill | null }) {
   const repo = useRepo();
   const router = useRouter();
   const { run, pending } = useAction();
-  const start: BudgetInput = budget ?? newBudgetFrom(settings, project, client?.name);
+  const firstIntro = {
+    trabajo: prefill?.tipo ? `presentación de proyecto de ${prefill.tipo.toLowerCase()}` : defaultTrabajo(project),
+    area: prefill?.area ?? "",
+    padron: project.padron ?? "",
+  };
+  const fresh = newBudgetFrom(settings, project, client?.name);
+  const start: BudgetInput = budget ?? {
+    ...fresh,
+    intro: fillIntro(settings.intro, firstIntro),
+    price: prefill?.precio ?? fresh.price,
+    wages_days: prefill?.jornales ?? fresh.wages_days,
+    wages_amount: prefill?.jornalesMonto ?? fresh.wages_amount,
+    expenses_amount: prefill?.gastos ?? fresh.expenses_amount,
+  };
   const [b, setB] = useState(start);
   const [price, setPrice] = useState(numText(start.price));
   const [expenses, setExpenses] = useState(numText(start.expenses_amount));
   const [wagesDays, setWagesDays] = useState(numText(start.wages_days));
   const [wagesAmount, setWagesAmount] = useState(numText(start.wages_amount));
   const [includes, setIncludes] = useState(linesToText(start.includes));
-  const [intro, setIntro] = useState({ trabajo: defaultTrabajo(project), area: "", padron: project.padron ?? "" });
+  const [intro, setIntro] = useState(firstIntro);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busyPdf, setBusyPdf] = useState(false);

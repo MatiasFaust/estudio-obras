@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Download, FilePlus2, FileText, Lock, Search, Settings2 } from "lucide-react";
+import { Calculator, Download, FilePlus2, FileText, Lock, Search, Settings2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { SimpleSelect } from "@/components/common/simple-select";
 import { downloadBudgetPdf } from "@/components/budgets/budget-pdf";
 import { BUDGET_STATUS, BudgetStatusBadge } from "@/components/budgets/budget-status";
+import { CalculatorDialog } from "@/components/budgets/calculator-dialog";
 import { money } from "@/components/budgets/budget-text";
 import { useBudgets, useBudgetSettings, useClients, useProjects, useSession } from "@/lib/data/hooks";
 import { formatDate, matches } from "@/lib/format";
@@ -38,6 +39,8 @@ export default function BudgetsPage() {
   const [choosing, setChoosing] = useState(false);
   const [projectId, setProjectId] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  // La calculadora se abre sola al entrar a Presupuestos
+  const [calcOpen, setCalcOpen] = useState(true);
 
   const projectById = useMemo(() => new Map((projects.data ?? []).map((p) => [p.id, p])), [projects.data]);
   const clientName = useMemo(() => new Map((clients.data ?? []).map((c) => [c.id, c.name])), [clients.data]);
@@ -74,6 +77,7 @@ export default function BudgetsPage() {
         description={`${rows.length} de ${all.length} presupuestos`}
         actions={
           <>
+            <Button variant="outline" onClick={() => setCalcOpen(true)}><Calculator /> Calculadora</Button>
             <Link href="/pagos/plantilla" className={buttonVariants({ variant: "outline" })}><Settings2 /> Plantilla</Link>
             <Button onClick={() => setChoosing(true)}><FilePlus2 /> Nuevo presupuesto</Button>
           </>
@@ -137,6 +141,14 @@ export default function BudgetsPage() {
           </Table>
         </div>
       )}
+
+      <CalculatorDialog
+        open={calcOpen}
+        onOpenChange={setCalcOpen}
+        settings={settings.data}
+        projects={projects.data ?? []}
+        clients={clients.data ?? []}
+      />
 
       <Dialog open={choosing} onOpenChange={setChoosing}>
         <DialogContent>

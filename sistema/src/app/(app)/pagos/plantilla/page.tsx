@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/common/empty-state";
 import { Field } from "@/components/common/field";
 import { PageHeader } from "@/components/common/page-header";
-import { ImageInput, linesToText, PaymentTermsEditor, textToLines } from "@/components/budgets/form-parts";
+import { ImageInput, linesToText, numText, parseOptional, PaymentTermsEditor, textToLines } from "@/components/budgets/form-parts";
 import { useAction, useBudgetSettings, useRepo, useSession } from "@/lib/data/hooks";
 import { can } from "@/lib/permissions";
 import type { BudgetPartner, BudgetSettings, BudgetSigner } from "@/lib/types";
@@ -37,13 +37,38 @@ function TemplateForm({ initial }: { initial: BudgetSettings }) {
   const set = <K extends keyof BudgetSettings>(k: K, v: BudgetSettings[K]) => setT((x) => ({ ...x, [k]: v }));
   const setSigner = (i: number, patch: Partial<BudgetSigner>) => set("signers", t.signers.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const setPartner = (i: number, patch: Partial<BudgetPartner & { text: string }>) => setPartners((ps) => ps.map((p, j) => (j === i ? { ...p, ...patch } : p)));
+  // Calculadora: los números se editan como texto ("1.200", "1,5")
+  const [calcTypes, setCalcTypes] = useState(initial.calc_types.map((c) => ({
+    name: c.name, fee: numText(c.fee_per_m2), wages: numText(c.wages_per_m2), build: numText(c.build_cost_per_m2),
+  })));
+  const [calc, setCalc] = useState({
+    wage: numText(initial.wage_value), fixed: numText(initial.expenses_fixed),
+    perM2: numText(initial.expenses_per_m2), iva: numText(initial.iva_rate),
+  });
+  const [calcError, setCalcError] = useState<string | null>(null);
+  const setCalcType = (i: number, patch: Partial<(typeof calcTypes)[number]>) => setCalcTypes((cs) => cs.map((c, j) => (j === i ? { ...c, ...patch } : c)));
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     const { updated_at: _, ...rest } = t;
     void _;
+    const types = calcTypes.filter((c) => c.name.trim()).map((c) => ({
+      name: c.name.trim(), fee_per_m2: parseOptional(c.fee), wages_per_m2: parseOptional(c.wages), build_cost_per_m2: parseOptional(c.build),
+    }));
+    const values = { wage_value: parseOptional(calc.wage), expenses_fixed: parseOptional(calc.fixed), expenses_per_m2: parseOptional(calc.perM2) };
+    const iva = parseOptional(calc.iva) ?? 22;
+    const bad = [...types.flatMap((c) => [c.fee_per_m2, c.wages_per_m2, c.build_cost_per_m2]), ...Object.values(values)]
+      .some((n) => n !== null && (Number.isNaN(n) || n < 0));
+    if (bad || Number.isNaN(iva) || iva < 0 || iva > 100) {
+      setCalcError("Hay un número mal escrito en la calculadora. Usá solo números, por ejemplo 1.200 o 1,5.");
+      return;
+    }
+    setCalcError(null);
     await run(() => repo.saveBudgetSettings({
       ...rest,
+      calc_types: types,
+      ...values,
+      iva_rate: iva,
       includes: textToLines(includes),
       payment_terms: t.payment_terms.filter((x) => x.label.trim() || x.percent),
       footer: {
@@ -115,6 +140,45 @@ function TemplateForm({ initial }: { initial: BudgetSettings }) {
         <CardHeader><CardTitle>Forma de pago</CardTitle></CardHeader>
         <CardContent>
           <PaymentTermsEditor terms={t.payment_terms} onChange={(v) => set("payment_terms", v)} />
+        </CardContent>
+      </Card>
+
+      <Card size="sm" id="calculadora">
+        <CardHeader><CardTitle>Calculadora</CardTitle></CardHeader>
+        <CardContent className="grid gap-4">
+          <p className="text-xs text-muted-foreground">Valores en pesos que usa la calculadora (se abre al entrar a Presupuestos). Lo que quede vacío no se calcula.</p>
+          <div className="grid gap-2">
+            <div className="hidden gap-2 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[1fr_120px_110px_130px_32px]">
+              <span>Tipo de trabajo</span><span>Honorarios por m²</span><span>Jornales por m²</span><span>Costo de obra por m²</span><span />
+            </div>
+            {calcTypes.map((c, i) => (
+              <div key={i} className="grid gap-2 rounded-lg border p-2 sm:grid-cols-[1fr_120px_110px_130px_32px] sm:border-0 sm:p-0">
+                <Input value={c.name} onChange={(e) => setCalcType(i, { name: e.target.value })} placeholder="Ej.: Reforma" aria-label={`Tipo de trabajo ${i + 1}`} />
+                <Input inputMode="decimal" value={c.fee} onChange={(e) => setCalcType(i, { fee: e.target.value })} placeholder="$ por m²" aria-label={`Honorarios por m² de ${c.name || "este tipo"}`} />
+                <Input inputMode="decimal" value={c.wages} onChange={(e) => setCalcType(i, { wages: e.target.value })} placeholder="Ej.: 1,5" aria-label={`Jornales por m² de ${c.name || "este tipo"}`} />
+                <Input inputMode="decimal" value={c.build} onChange={(e) => setCalcType(i, { build: e.target.value })} placeholder="$ por m²" aria-label={`Costo de obra por m² de ${c.name || "este tipo"}`} />
+                <Button type="button" size="icon-sm" variant="ghost" aria-label={`Quitar ${c.name || "este tipo"}`} onClick={() => setCalcTypes((cs) => cs.filter((_, j) => j !== i))}><Trash2 /></Button>
+              </div>
+            ))}
+            <Button type="button" size="sm" variant="outline" className="justify-self-start" onClick={() => setCalcTypes((cs) => [...cs, { name: "", fee: "", wages: "", build: "" }])}>
+              <Plus /> Agregar tipo de trabajo
+            </Button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-4">
+            <Field label="Valor del jornal" htmlFor="tp-wage" optional>
+              <Input id="tp-wage" inputMode="decimal" value={calc.wage} onChange={(e) => setCalc((x) => ({ ...x, wage: e.target.value }))} />
+            </Field>
+            <Field label="Gastos fijos" htmlFor="tp-exp-fixed" optional>
+              <Input id="tp-exp-fixed" inputMode="decimal" value={calc.fixed} onChange={(e) => setCalc((x) => ({ ...x, fixed: e.target.value }))} />
+            </Field>
+            <Field label="Gastos por m²" htmlFor="tp-exp-m2" optional>
+              <Input id="tp-exp-m2" inputMode="decimal" value={calc.perM2} onChange={(e) => setCalc((x) => ({ ...x, perM2: e.target.value }))} />
+            </Field>
+            <Field label="IVA (%)" htmlFor="tp-iva">
+              <Input id="tp-iva" inputMode="decimal" value={calc.iva} onChange={(e) => setCalc((x) => ({ ...x, iva: e.target.value }))} />
+            </Field>
+          </div>
+          {calcError && <p className="text-sm text-destructive" role="alert">{calcError}</p>}
         </CardContent>
       </Card>
 

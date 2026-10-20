@@ -278,6 +278,40 @@ async function logout(page) {
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
   await sleep(800);
   check((await page.$eval('main', (e) => e.textContent)).includes('2095'), 'menú Presupuestos: aparece el presupuesto recién creado');
+  // Calculadora: se abre sola. Reforma de 86 m² (valores de la demo: $ 1.200/m², 1,5 J/m², jornal $ 2.200)
+  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
+  check(!!(await page.$('#calc-area')), 'calculadora: se abre sola al entrar a Presupuestos');
+  await page.click('[role=dialog] [aria-label="Tipo de trabajo"]');
+  await sleep(400);
+  await clickText(page, '[role=option]', 'Reforma');
+  await sleep(300);
+  await page.type('#calc-area', '86');
+  await sleep(300);
+  const calcTxt = await page.$eval('[role=dialog]', (e) => e.textContent);
+  check(calcTxt.includes('$ 103.200 + IVA') && calcTxt.includes('129 J · $ 283.800') && calcTxt.includes('$ 27.900') && calcTxt.includes('$ 2.150.000'),
+    'calculadora: honorarios, jornales, gastos y costo de obra');
+  // La ventanita es alta: con la pantalla chica la lista de obras queda fuera de vista
+  const viewport = page.viewport();
+  await page.setViewport({ width: 1280, height: 1100 });
+  await sleep(300);
+  await page.click('[role=dialog] [aria-label="Obra del presupuesto"]');
+  await sleep(500);
+  await clickText(page, '[role=option]', 'Vivienda Acosta');
+  await page.waitForFunction(() => {
+    const b = [...document.querySelectorAll('[role=dialog] button[type=submit]')].find((x) => x.textContent.includes('Armar presupuesto'));
+    return b && !b.disabled;
+  }, { timeout: 5000 }).catch(() => {});
+  await clickText(page, '[role=dialog] button[type=submit]', 'Armar presupuesto');
+  if (viewport) await page.setViewport(viewport);
+  await page.waitForSelector('#bg-price', { timeout: 10000 });
+  await sleep(500);
+  const pre = await page.evaluate(() => ['#bg-price', '#bg-wages-days', '#bg-wages-amount', '#bg-expenses-amount', '#bg-intro'].map((s) => document.querySelector(s).value));
+  check(pre[0] === '103.200' && pre[1] === '129' && pre[2] === '283.800' && pre[3] === '27.900' && pre[4].includes('86 m²') && pre[4].includes('reforma'),
+    `calculadora → presupuesto nuevo con precio, jornales, gastos y superficie (${pre.slice(0, 4).join(' | ')})`);
+  await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
+  await page.keyboard.press('Escape');
+  await sleep(500);
   await clickText(page, 'button', 'Nuevo presupuesto');
   await sleep(500);
   await page.click('[role=dialog] [aria-label="Obra"]');

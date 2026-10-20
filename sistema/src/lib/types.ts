@@ -316,6 +316,17 @@ export interface BudgetPartner {
   logo: string | null;
 }
 
+/** Tipo de trabajo de la calculadora de presupuestos (valores en pesos) */
+export interface CalcType {
+  name: string;
+  /** Honorarios por m² */
+  fee_per_m2: number | null;
+  /** Jornales estimados por m² */
+  wages_per_m2: number | null;
+  /** Costo estimado de construcción por m² */
+  build_cost_per_m2: number | null;
+}
+
 /** Plantilla del estudio (una sola) */
 export interface BudgetSettings {
   studio_name: string;
@@ -332,6 +343,12 @@ export interface BudgetSettings {
   note: string;
   signers: BudgetSigner[];
   footer: { lines: string[]; partners: BudgetPartner[] };
+  // Calculadora
+  calc_types: CalcType[];
+  wage_value: number | null;
+  expenses_fixed: number | null;
+  expenses_per_m2: number | null;
+  iva_rate: number;
   updated_at: string;
 }
 

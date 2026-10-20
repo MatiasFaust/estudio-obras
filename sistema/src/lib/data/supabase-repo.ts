@@ -217,8 +217,19 @@ export function createSupabaseRepo(): Repo {
     async deleteBudget(id) {
       await run(sb.from("budgets").delete().eq("id", id).select().single());
     },
-    getBudgetSettings: async () =>
-      ((await run(sb.from("budget_settings").select("*").maybeSingle())) as BudgetSettings | null) ?? null,
+    async getBudgetSettings() {
+      const t = (await run(sb.from("budget_settings").select("*").maybeSingle())) as BudgetSettings | null;
+      if (!t) return null;
+      // Antes de la migración de la calculadora estas columnas no existen
+      return {
+        ...t,
+        calc_types: t.calc_types ?? [],
+        wage_value: num(t.wage_value ?? null),
+        expenses_fixed: num(t.expenses_fixed ?? null),
+        expenses_per_m2: num(t.expenses_per_m2 ?? null),
+        iva_rate: t.iva_rate === undefined || t.iva_rate === null ? 22 : Number(t.iva_rate),
+      };
+    },
     async saveBudgetSettings(input) {
       await run(sb.from("budget_settings").update(input).eq("id", true).select().single());
     },
