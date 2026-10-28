@@ -48,6 +48,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Sin sesión también se sirven los archivos estáticos y la ficha de aplicación (manifest)
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|ttf)$).*)"],
+  // Sin sesión también se sirven los archivos estáticos, la ficha de aplicación (manifest)
+  // y el aviso diario que mantiene activo Supabase (lo llama Vercel, sin sesión)
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|api/mantener-activo|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|ttf)$).*)"],
 };

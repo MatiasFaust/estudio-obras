@@ -56,6 +56,9 @@ async function logout(page) {
   await page.goto(`${BASE}/obras`, { waitUntil: 'networkidle2' });
   await sleep(800);
   check(page.url().includes('/login'), 'ruta privada sin sesión redirige al login');
+  // Aviso diario que mantiene activo Supabase: responde sin sesión (en demo no consulta nada)
+  const keepAlive = await page.evaluate(() => fetch('/api/mantener-activo').then(async (r) => ({ status: r.status, body: await r.json() })));
+  check(keepAlive.status === 200 && keepAlive.body.ok === true, 'aviso diario a Supabase responde sin sesión');
 
   // --- Administrador
   await login(page, 'Laura Méndez');
