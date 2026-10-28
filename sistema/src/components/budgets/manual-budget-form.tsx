@@ -111,8 +111,8 @@ export function ManualBudgetForm({
         </Field>
       </div>
       <div className="grid items-start gap-3 sm:grid-cols-3">
-        <Field label="Avance">
-          <SimpleSelect value={b.status} onChange={(v) => set("status", v as Budget["status"])} options={BUDGET_STATUS_OPTIONS} aria-label="Avance" />
+        <Field label="Estado">
+          <SimpleSelect value={b.status} onChange={(v) => set("status", v as Budget["status"])} options={BUDGET_STATUS_OPTIONS} aria-label="Estado" />
         </Field>
         <Field label="Número" htmlFor="mb-number" optional>
           <Input id="mb-number" value={b.number} onChange={(e) => set("number", e.target.value)} />

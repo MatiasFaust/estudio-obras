@@ -215,8 +215,11 @@ async function logout(page) {
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
   await sleep(1000);
   const pagosTxt = await page.$eval('main', (e) => e.textContent);
-  check(['N.º', 'Padrón', 'Cliente', 'Servicio', 'Avance', 'Honorarios'].every((h) => pagosTxt.includes(h)) && pagosTxt.includes('2094') && pagosTxt.includes('Familia Ejemplo Acosta') && !pagosTxt.includes('Creada el'),
-    'menú Presupuestos: tabla con N.º, padrón, cliente, servicio, avance y honorarios');
+  check(['N.º', 'Padrón', 'Cliente', 'Servicio', 'Estado', 'Avance', 'Honorarios'].every((h) => pagosTxt.includes(h)) && pagosTxt.includes('2094') && pagosTxt.includes('Familia Ejemplo Acosta') && !pagosTxt.includes('Creada el'),
+    'menú Presupuestos: tabla con N.º, padrón, cliente, servicio, estado, avance y honorarios');
+  // Avance de pago: la obra p1 cobró US$ 27.000 de US$ 48.000 (56 %) y la barrita lleva a sus pagos
+  const avancePago = await page.$eval('[aria-label^="Pagos de 2094"]', (a) => ({ href: a.getAttribute('href'), pct: a.querySelector('[role=progressbar]')?.getAttribute('aria-valuenow') })).catch(() => null);
+  check(avancePago?.pct === '56' && avancePago?.href === '/obras/p1?tab=pagos', `avance de pago del presupuesto aceptado: 56 % y enlace a los pagos (${JSON.stringify(avancePago)})`);
   check(!!(await page.$$eval('main button', (bs) => bs.some((b) => b.textContent.trim() === 'Presupuesto'))), 'menú Presupuestos: botón "+ Presupuesto" arriba');
   await page.goto(`${BASE}/obras/p1`, { waitUntil: 'networkidle2' });
   await sleep(1000);
@@ -369,27 +372,27 @@ async function logout(page) {
   check(!(await page.$('#mb-client')), 'manual: al guardar se cierra la ventana');
   const manualRow = await page.$$eval('main tbody tr', (rows) => rows.map((r) => r.textContent).find((t) => t.includes('3001')) ?? '');
   check(manualRow.includes('7788') && manualRow.includes('Cliente Manual Prueba') && manualRow.includes('Regularización') && manualRow.includes('Pendiente') && manualRow.includes('$ 85.000'),
-    'manual: aparece en la tabla con padrón, cliente, servicio, avance y honorarios');
+    'manual: aparece en la tabla con padrón, cliente, servicio, estado y honorarios');
   check(!(await page.$('[aria-label="Descargar PDF de 3001"]')) && !!(await page.$('[aria-label="Descargar PDF de 2097"]')), 'PDF solo en los presupuestos con hoja membretada');
-  // Cambiar el avance desde la tabla
-  await page.click('[aria-label="Cambiar avance de 3001"]');
+  // Cambiar el estado desde la tabla
+  await page.click('[aria-label="Cambiar estado de 3001"]');
   await sleep(400);
   await clickText(page, '[role=menuitemradio]', 'En ejecución');
   await sleep(1000);
   const manualRow2 = await page.$$eval('main tbody tr', (rows) => rows.map((r) => r.textContent).find((t) => t.includes('3001')) ?? '');
-  check(manualRow2.includes('En ejecución'), 'cambia el avance desde la tabla');
-  // Buscar por padrón y filtrar por avance
+  check(manualRow2.includes('En ejecución'), 'cambia el estado desde la tabla');
+  // Buscar por padrón y filtrar por estado
   await page.type('[aria-label="Buscar presupuestos"]', '7788');
   await sleep(400);
   check((await page.$$('main tbody tr')).length === 1, 'búsqueda por padrón');
   await page.click('[aria-label="Buscar presupuestos"]', { clickCount: 3 });
   await page.keyboard.press('Backspace');
-  await page.click('[aria-label="Filtrar por avance"]');
+  await page.click('[aria-label="Filtrar por estado"]');
   await sleep(400);
   await clickText(page, '[role=option]', 'Aceptado');
   await sleep(400);
   const accepted = await page.$$eval('main tbody tr', (rows) => rows.map((r) => r.textContent));
-  check(accepted.length >= 1 && accepted.every((t) => t.includes('Aceptado')), `filtro por avance: solo aceptados (${accepted.length})`);
+  check(accepted.length >= 1 && accepted.every((t) => t.includes('Aceptado')), `filtro por estado: solo aceptados (${accepted.length})`);
   // Editar el manual
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
   await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});

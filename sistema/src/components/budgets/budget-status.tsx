@@ -1,7 +1,7 @@
 import type { BudgetKind, BudgetStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-/** Avance del presupuesto (en este orden aparecen en los filtros y selectores) */
+/** Estado del presupuesto (en este orden aparecen en los filtros y selectores) */
 export const BUDGET_STATUS: Record<BudgetStatus, { label: string; className: string }> = {
   pendiente: { label: "Pendiente", className: "bg-muted text-muted-foreground" },
   enviado: { label: "Enviado", className: "bg-sky-500/10 text-sky-700 dark:text-sky-400" },

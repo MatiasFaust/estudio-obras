@@ -267,7 +267,7 @@ function BudgetForm({
           <Field label="Fecha" htmlFor="bg-date">
             <Input id="bg-date" type="date" value={b.issued_on} onChange={(e) => set("issued_on", e.target.value)} />
           </Field>
-          <Field label="Avance">
+          <Field label="Estado">
             <SimpleSelect value={b.status} onChange={(v) => set("status", v as Budget["status"])} options={BUDGET_STATUS_OPTIONS} aria-label="Estado" />
           </Field>
         </CardContent>

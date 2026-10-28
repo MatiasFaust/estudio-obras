@@ -13,21 +13,25 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
+import { ProgressBar } from "@/components/common/progress-bar";
 import { SimpleSelect } from "@/components/common/simple-select";
 import { downloadBudgetPdf } from "@/components/budgets/budget-pdf";
 import { BUDGET_KINDS, BUDGET_STATUS, BUDGET_STATUS_OPTIONS, BudgetStatusBadge } from "@/components/budgets/budget-status";
 import { CalculatorDialog } from "@/components/budgets/calculator-dialog";
 import { money } from "@/components/budgets/budget-text";
 import { ManualBudgetForm } from "@/components/budgets/manual-budget-form";
-import { useAction, useBudgets, useBudgetSettings, useClients, useProjects, useRepo, useSession } from "@/lib/data/hooks";
+import { summarize } from "@/components/payments/summary";
+import { useAction, useBudgets, useBudgetSettings, useClients, useFinances, usePayments, useProjects, useRepo, useSession } from "@/lib/data/hooks";
 import { formatDate, matches } from "@/lib/format";
 import { can } from "@/lib/permissions";
 import type { Budget, BudgetStatus } from "@/lib/types";
 
-const STATUS_FILTER = [{ value: "", label: "Todos los avances" }].concat(BUDGET_STATUS_OPTIONS);
+const STATUS_FILTER = [{ value: "", label: "Todos los estados" }].concat(BUDGET_STATUS_OPTIONS);
 const KIND_FILTER = [{ value: "", label: "Todos los tipos" }].concat(
   Object.entries(BUDGET_KINDS).map(([value, k]) => ({ value, label: k.label })),
 );
+// Estados en los que el presupuesto ya se está cobrando (su precio es el monto acordado de la obra)
+const PAYING: BudgetStatus[] = ["aceptado", "en_ejecucion", "finalizado"];
 
 /** Presupuestos: lista de todos los presupuestos del estudio y creador */
 export default function BudgetsPage() {
@@ -40,6 +44,8 @@ export default function BudgetsPage() {
   const settings = useBudgetSettings(allowed);
   const projects = useProjects();
   const clients = useClients();
+  const finances = useFinances(allowed);
+  const payments = usePayments(allowed);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [kind, setKind] = useState("");
@@ -72,6 +78,14 @@ export default function BudgetsPage() {
     }
   }
 
+  // Avance de pago: lo cobrado en la obra sobre el monto acordado (antes de aceptarlo, 0 %)
+  function paidPercent(b: Budget) {
+    if (!b.project_id || !PAYING.includes(b.status)) return 0;
+    const finance = finances.data?.find((f) => f.project_id === b.project_id);
+    const own = (payments.data ?? []).filter((p) => p.project_id === b.project_id);
+    return summarize(finance, own).percent ?? 0;
+  }
+
   const changeStatus = (b: Budget, next: BudgetStatus) =>
     next !== b.status && run(() => repo.updateBudget(b.id, { status: next }), `${b.number ? `Presupuesto ${b.number}` : "Presupuesto"}: ${BUDGET_STATUS[next].label}`);
 
@@ -94,11 +108,11 @@ export default function BudgetsPage() {
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Número, cliente, padrón…" className="pl-8" aria-label="Buscar presupuestos" />
         </div>
-        <SimpleSelect value={status} onChange={setStatus} options={STATUS_FILTER} placeholder="Todos los avances" className="w-44" aria-label="Filtrar por avance" />
+        <SimpleSelect value={status} onChange={setStatus} options={STATUS_FILTER} placeholder="Todos los estados" className="w-44" aria-label="Filtrar por estado" />
         <SimpleSelect value={kind} onChange={setKind} options={KIND_FILTER} placeholder="Todos los tipos" className="w-52" aria-label="Filtrar por tipo" />
       </div>
 
-      {budgets.isLoading || projects.isLoading ? (
+      {budgets.isLoading || projects.isLoading || finances.isLoading || payments.isLoading ? (
         <p className="py-8 text-sm text-muted-foreground">Cargando presupuestos…</p>
       ) : rows.length === 0 ? (
         <EmptyState
@@ -115,7 +129,8 @@ export default function BudgetsPage() {
                 <TableHead className="hidden sm:table-cell">Padrón</TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead className="hidden md:table-cell">Servicio</TableHead>
-                <TableHead>Avance</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead className="hidden w-40 sm:table-cell">Avance</TableHead>
                 <TableHead className="text-right">Honorarios</TableHead>
                 <TableHead className="w-24" />
               </TableRow>
@@ -139,7 +154,7 @@ export default function BudgetsPage() {
                     <DropdownMenu>
                       <DropdownMenuTrigger
                         render={
-                          <button type="button" className="inline-flex items-center gap-0.5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Cambiar avance de ${b.number || "presupuesto"}`}>
+                          <button type="button" className="inline-flex items-center gap-0.5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Cambiar estado de ${b.number || "presupuesto"}`}>
                             <BudgetStatusBadge status={b.status} />
                             <ChevronDown className="size-3 text-muted-foreground" />
                           </button>
@@ -153,6 +168,9 @@ export default function BudgetsPage() {
                         </DropdownMenuRadioGroup>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">
+                    <PaymentProgress budget={b} percent={paidPercent(b)} />
                   </TableCell>
                   <TableCell className="text-right whitespace-nowrap tabular-nums">{b.price !== null ? money(b.price, b.currency) : "—"}</TableCell>
                   <TableCell>
@@ -231,6 +249,27 @@ export default function BudgetsPage() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Barrita de cuánto se cobró; lleva a la pestaña de pagos de la obra, donde se registran */
+function PaymentProgress({ budget: b, percent }: { budget: Budget; percent: number }) {
+  if (!b.project_id || b.status === "rechazado") {
+    return (
+      <span className="text-muted-foreground" title={b.project_id ? undefined : "Los pagos se registran en la obra: vinculá el presupuesto a una obra para ver el avance."}>
+        —
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={`/obras/${b.project_id}?tab=pagos`}
+      className="block w-36 rounded-sm outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label={`Pagos de ${b.number || "presupuesto"}: ${percent}% cobrado`}
+      title="Ver y registrar los pagos de la obra"
+    >
+      <ProgressBar value={percent} />
+    </Link>
   );
 }
 
