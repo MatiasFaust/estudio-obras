@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Banknote, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -70,13 +71,22 @@ export function PaymentsPanel({ project, budget }: { project: Project; budget?: 
         {finance?.notes && <p className="mt-3 text-xs text-muted-foreground">{finance.notes}</p>}
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-medium">Pagos recibidos ({own.length})</h2>
-        <Button size="sm" onClick={() => setEditing({ payment: null, key: Date.now() })}><Plus /> Registrar pago</Button>
+        {/* Los pagos de una obra se registran desde Presupuestos (botón "Registrar pago", arriba) */}
+        {project ? (
+          <Link href="/pagos" className="text-xs text-muted-foreground hover:text-foreground hover:underline">Se registran desde Presupuestos</Link>
+        ) : (
+          <Button size="sm" onClick={() => setEditing({ payment: null, key: Date.now() })}><Plus /> Registrar pago</Button>
+        )}
       </div>
 
       {own.length === 0 ? (
-        <EmptyState icon={Banknote} title="Todavía no hay pagos registrados" description="Registrá cada adelanto o pago del cliente para seguir el saldo." />
+        <EmptyState
+          icon={Banknote}
+          title="Todavía no hay pagos registrados"
+          description={project ? "Se registran desde Presupuestos, con el botón “Registrar pago”." : "Registrá cada adelanto o pago del cliente para seguir el saldo."}
+        />
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-card">
           <Table>
@@ -125,9 +135,7 @@ export function PaymentsPanel({ project, budget }: { project: Project; budget?: 
       {editing && (
         <PaymentDialog
           key={editing.key}
-          projectId={project?.id}
-          budgetId={budget?.id}
-          contractCurrency={s.currency}
+          target={{ projectId: project?.id, budgetId: budget?.id, contractCurrency: s.currency }}
           payment={editing.payment}
           onClose={() => setEditing(null)}
         />

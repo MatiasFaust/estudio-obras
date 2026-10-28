@@ -13,7 +13,7 @@ import { SimpleSelect } from "@/components/common/simple-select";
 import { CURRENCIES, PAYMENT_METHODS } from "@/lib/constants";
 import { useAction, useRepo } from "@/lib/data/hooks";
 import { convertAmount, formatMoney } from "@/lib/format";
-import type { Currency, Finance, Payment } from "@/lib/types";
+import type { Currency, Finance, FinanceInput, Payment } from "@/lib/types";
 import { nullIfEmpty, parseMoney, paymentSchema, type PaymentFormValues } from "@/lib/validation";
 
 const CURRENCY_OPTIONS = Object.entries(CURRENCIES).map(([value, label]) => ({ value, label }));
@@ -72,23 +72,43 @@ export function FinanceDialog({ projectId, finance, onClose }: { projectId: stri
   );
 }
 
-/** Registrar o editar un pago del cliente (de una obra o de un presupuesto sin obra) */
-export function PaymentDialog({
-  projectId,
-  budgetId,
-  contractCurrency,
-  payment,
-  onClose,
-}: {
+/** A quién se le registra el pago y en qué moneda se acordó */
+export interface PaymentTarget {
   projectId?: string;
   budgetId?: string;
   contractCurrency: Currency;
+  /** Si la obra todavía no tiene monto acordado, se fija con esto antes de registrar el pago */
+  agreement?: FinanceInput;
+}
+
+export interface PaymentChoice {
+  value: string;
+  label: string;
+  /** Se muestra debajo al elegirlo (ej.: honorarios y cuánto se cobró) */
+  hint?: string;
+  target: PaymentTarget;
+}
+
+/** Registrar o editar un pago del cliente: de una obra o presupuesto fijo, o eligiendo el presupuesto */
+export function PaymentDialog({
+  target,
+  choices,
+  payment,
+  onClose,
+}: {
+  target?: PaymentTarget;
+  choices?: PaymentChoice[];
   payment?: Payment | null;
   onClose: () => void;
 }) {
   const repo = useRepo();
   const { run, pending } = useAction();
-  const { register, control, handleSubmit, setError, formState: { errors } } = useForm<PaymentFormValues>({
+  const [choice, setChoice] = useState("");
+  const [choiceError, setChoiceError] = useState<string | null>(null);
+  const chosen = choices?.find((c) => c.value === choice);
+  const current = target ?? chosen?.target;
+  const contractCurrency = current?.contractCurrency ?? "UYU";
+  const { register, control, handleSubmit, setError, setValue, formState: { errors } } = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
     defaultValues: {
       paid_on: payment?.paid_on ?? today(),
@@ -110,14 +130,18 @@ export function PaymentDialog({
     : null;
 
   const submit = handleSubmit(async (v) => {
+    if (!current) {
+      setChoiceError("Elegí el presupuesto");
+      return;
+    }
     const rate = parseMoney(v.exchange_rate);
     if (needsRate && (!rate || Number.isNaN(rate) || rate <= 0)) {
       setError("exchange_rate", { message: "Ingresá la cotización (pesos por dólar)" });
       return;
     }
     const input = {
-      project_id: projectId ?? null,
-      budget_id: budgetId ?? null,
+      project_id: current.projectId ?? null,
+      budget_id: current.budgetId ?? null,
       paid_on: v.paid_on,
       amount: parseMoney(v.amount)!,
       currency: v.currency,
@@ -127,10 +151,11 @@ export function PaymentDialog({
       receipt: nullIfEmpty(v.receipt),
       notes: nullIfEmpty(v.notes),
     };
-    const ok = await run(
-      () => (payment ? repo.updatePayment(payment.id, input) : repo.createPayment(input)),
-      payment ? "Pago actualizado" : "Pago registrado",
-    );
+    const ok = await run(async () => {
+      if (payment) return repo.updatePayment(payment.id, input);
+      if (current.projectId && current.agreement) await repo.setFinance(current.projectId, current.agreement);
+      await repo.createPayment(input);
+    }, payment ? "Pago actualizado" : "Pago registrado");
     if (ok) onClose();
   });
 
@@ -141,8 +166,25 @@ export function PaymentDialog({
           <DialogHeader>
             <DialogTitle>{payment ? "Editar pago" : "Registrar pago"}</DialogTitle>
           </DialogHeader>
+          {choices && (
+            <Field label="Presupuesto" error={choiceError ?? undefined} hint={chosen?.hint}>
+              <SimpleSelect
+                value={choice}
+                onChange={(v) => {
+                  setChoice(v);
+                  setChoiceError(null);
+                  const next = choices.find((c) => c.value === v)?.target;
+                  if (next) setValue("currency", next.contractCurrency);
+                }}
+                options={choices.map(({ value, label }) => ({ value, label }))}
+                placeholder="Elegí el presupuesto"
+                aria-label="Presupuesto del pago"
+                aria-invalid={!!choiceError}
+              />
+            </Field>
+          )}
           <Field label="Concepto" htmlFor="pay-concept" error={errors.concept?.message}>
-            <Input id="pay-concept" autoFocus placeholder="Ej.: Adelanto, Certificado de avance 2" aria-invalid={!!errors.concept} {...register("concept")} />
+            <Input id="pay-concept" autoFocus={!choices} placeholder="Ej.: Adelanto, Certificado de avance 2" aria-invalid={!!errors.concept} {...register("concept")} />
           </Field>
           <div className="grid gap-3 sm:grid-cols-[1fr_1fr_150px]">
             <Field label="Fecha" htmlFor="pay-date" error={errors.paid_on?.message}>

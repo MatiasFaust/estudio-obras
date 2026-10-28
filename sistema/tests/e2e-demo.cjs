@@ -227,10 +227,26 @@ async function logout(page) {
   check(resumenTxt.includes('PresupuestoUS$ 48.000,00') && resumenTxt.includes('Por cobrarUS$ 21.000,00'), 'resumen de la obra: presupuesto y saldo por cobrar');
   await page.goto(`${BASE}/obras/p1?tab=pagos`, { waitUntil: 'networkidle2' });
   await sleep(1000);
-  check((await page.$eval('main', (e) => e.textContent)).includes('US$ 21.000,00'), 'pagos de la obra: saldo por cobrar en USD (48.000 − 27.000)');
-  await clickText(page, 'button', 'Registrar pago');
+  const obraPagosTxt = await page.$eval('main', (e) => e.textContent);
+  check(obraPagosTxt.includes('US$ 21.000,00'), 'pagos de la obra: saldo por cobrar en USD (48.000 − 27.000)');
+  check(!(await page.$$eval('main button', (bs) => bs.some((b) => b.textContent.trim() === 'Registrar pago'))) && obraPagosTxt.includes('Se registran desde Presupuestos'),
+    'la obra ya no tiene botón para registrar pagos (se registran desde Presupuestos)');
+  // Registrar el pago desde Presupuestos (botón de arriba): se elige el presupuesto
+  await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
+  await page.keyboard.press('Escape');
   await sleep(500);
+  await clickText(page, 'main button', 'Registrar pago');
+  await page.waitForSelector('#pay-concept', { timeout: 10000 });
   await page.type('#pay-concept', 'Certificado de avance 3');
+  await clickText(page, '[role=dialog] button[type=submit]', 'Guardar pago');
+  await sleep(400);
+  check((await page.$eval('[role=dialog]', (e) => e.textContent)).includes('Elegí el presupuesto'), 'registrar pago: pide elegir el presupuesto');
+  await page.click('[aria-label="Presupuesto del pago"]');
+  await sleep(300);
+  await clickText(page, '[role=option]', '2094');
+  await sleep(300);
+  check((await page.$eval('[role=dialog]', (e) => e.textContent)).includes('cobrado 56 %'), 'registrar pago: muestra cuánto se cobró del presupuesto elegido');
   await page.type('#pay-amount', '80.000');
   await page.click('[aria-label="Moneda del pago"]');
   await sleep(300);
@@ -239,10 +255,14 @@ async function logout(page) {
   await page.type('#pay-rate', '40');
   await sleep(200);
   check((await page.$eval('[role=dialog]', (e) => e.textContent)).includes('US$ 2.000,00'), 'muestra la conversión con la cotización');
-  await clickText(page, 'button[type=submit]', 'Guardar pago');
+  await clickText(page, '[role=dialog] button[type=submit]', 'Guardar pago');
+  await sleep(1000);
+  const barAfter = await page.$eval('[aria-label^="Pagos de 2094"] [role=progressbar]', (e) => e.getAttribute('aria-valuenow')).catch(() => null);
+  check(barAfter === '60', `la barrita sube con el pago: 56 % → ${barAfter} % (29.000 de 48.000)`);
+  await page.goto(`${BASE}/obras/p1?tab=pagos`, { waitUntil: 'networkidle2' });
   await sleep(1000);
   const panel = await page.$eval('main', (e) => e.textContent);
-  check(panel.includes('US$ 29.000,00') && panel.includes('US$ 19.000,00'), 'pago registrado: pagado 29.000 y saldo 19.000');
+  check(panel.includes('US$ 29.000,00') && panel.includes('US$ 19.000,00') && panel.includes('Certificado de avance 3'), 'pago registrado en la obra: pagado 29.000 y saldo 19.000');
   await page.screenshot({ path: path.join(OUT, 's8-pagos.png') });
 
   // --- Presupuestos en PDF

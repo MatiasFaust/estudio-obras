@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { ArrowLeft, Calculator, ChevronDown, Download, FileText, Lock, NotebookPen, Pencil, Plus, Search, Settings2 } from "lucide-react";
+import { ArrowLeft, Banknote, Calculator, ChevronDown, Download, FileText, Lock, NotebookPen, Pencil, Plus, Search, Settings2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -16,13 +16,14 @@ import { PageHeader } from "@/components/common/page-header";
 import { ProgressBar } from "@/components/common/progress-bar";
 import { SimpleSelect } from "@/components/common/simple-select";
 import { downloadBudgetPdf } from "@/components/budgets/budget-pdf";
-import { BUDGET_KINDS, BUDGET_PAYING, BUDGET_STATUS, BUDGET_STATUS_OPTIONS, BudgetStatusBadge } from "@/components/budgets/budget-status";
+import { BUDGET_KINDS, BUDGET_STATUS, BUDGET_STATUS_OPTIONS, BudgetStatusBadge } from "@/components/budgets/budget-status";
 import { CalculatorDialog } from "@/components/budgets/calculator-dialog";
 import { money } from "@/components/budgets/budget-text";
 import { ManualBudgetForm } from "@/components/budgets/manual-budget-form";
+import { PaymentDialog, type PaymentChoice } from "@/components/payments/payment-dialogs";
 import { budgetAgreement, summarize } from "@/components/payments/summary";
 import { useAction, useBudgets, useBudgetSettings, useClients, useFinances, usePayments, useProjects, useRepo, useSession } from "@/lib/data/hooks";
-import { formatDate, matches } from "@/lib/format";
+import { formatDate, formatMoney, matches } from "@/lib/format";
 import { can } from "@/lib/permissions";
 import type { Budget, BudgetStatus } from "@/lib/types";
 
@@ -50,6 +51,8 @@ export default function BudgetsPage() {
   // Ventana de "+ Presupuesto": primero se elige el tipo; el manual se completa ahí mismo
   const [creating, setCreating] = useState<null | "choose" | "manual">(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // Ventana de "Registrar pago" (la clave la reinicia cada vez que se abre)
+  const [paying, setPaying] = useState<number | null>(null);
   // La calculadora se abre sola al entrar a Presupuestos
   const [calcOpen, setCalcOpen] = useState(true);
 
@@ -76,15 +79,42 @@ export default function BudgetsPage() {
     }
   }
 
-  // Avance de pago. Con obra: lo cobrado en la obra sobre el monto acordado (antes de aceptarlo, 0 %).
-  // Sin obra: sus propios pagos sobre los honorarios.
-  function paidPercent(b: Budget) {
-    if (!b.project_id) return summarize(budgetAgreement(b), (payments.data ?? []).filter((p) => p.budget_id === b.id)).percent ?? 0;
-    if (!BUDGET_PAYING.includes(b.status)) return 0;
+  // Avance de pago. Con obra: lo cobrado en la obra sobre su monto acordado (si la obra todavía no
+  // tiene, sobre los honorarios del presupuesto). Sin obra: sus propios pagos sobre los honorarios.
+  function paymentSummary(b: Budget) {
+    const pays = payments.data ?? [];
+    if (!b.project_id) return summarize(budgetAgreement(b), pays.filter((p) => p.budget_id === b.id));
     const finance = finances.data?.find((f) => f.project_id === b.project_id);
-    const own = (payments.data ?? []).filter((p) => p.project_id === b.project_id);
-    return summarize(finance, own).percent ?? 0;
+    return summarize(finance?.agreed_amount != null ? finance : budgetAgreement(b), pays.filter((p) => p.project_id === b.project_id));
   }
+  const paidPercent = (b: Budget) => paymentSummary(b).percent ?? 0;
+
+  // Presupuestos a los que se les puede registrar un pago: con obra, el pago va a la obra
+  // (si la obra no tiene monto acordado, pasan a serlo los honorarios); sin obra, al presupuesto.
+  const paymentChoices: PaymentChoice[] = all
+    .filter((b) => b.status !== "rechazado")
+    .map((b) => {
+      const p = b.project_id ? projectById.get(b.project_id) : undefined;
+      const finance = b.project_id ? finances.data?.find((f) => f.project_id === b.project_id) : undefined;
+      const s = paymentSummary(b);
+      const hasAgreement = finance?.agreed_amount != null;
+      return {
+        value: b.id,
+        label: `${b.number || "Sin número"} · ${b.client_name || "Sin cliente"}${p ? ` (${p.name})` : ""}`,
+        hint: s.agreed !== null ? `${hasAgreement ? "Monto acordado de la obra" : "Honorarios"} ${formatMoney(s.agreed, s.currency)} · cobrado ${s.percent ?? 0} %` : undefined,
+        target: b.project_id
+          ? {
+              projectId: b.project_id,
+              contractCurrency: hasAgreement ? finance!.currency : b.currency,
+              agreement: hasAgreement || b.price === null ? undefined : {
+                agreed_amount: b.price,
+                currency: b.currency,
+                notes: b.number ? `Según el presupuesto ${b.number}.` : "Según el presupuesto.",
+              },
+            }
+          : { budgetId: b.id, contractCurrency: b.currency },
+      };
+    });
 
   const changeStatus = (b: Budget, next: BudgetStatus) =>
     next !== b.status && run(() => repo.updateBudget(b.id, { status: next }), `${b.number ? `Presupuesto ${b.number}` : "Presupuesto"}: ${BUDGET_STATUS[next].label}`);
@@ -98,6 +128,7 @@ export default function BudgetsPage() {
           <>
             <Button variant="outline" onClick={() => setCalcOpen(true)}><Calculator /> Calculadora</Button>
             <Link href="/pagos/plantilla" className={buttonVariants({ variant: "outline" })}><Settings2 /> Plantilla</Link>
+            <Button variant="outline" disabled={!paymentChoices.length} onClick={() => setPaying(Date.now())}><Banknote /> Registrar pago</Button>
             <Button onClick={() => setCreating("choose")}><Plus /> Presupuesto</Button>
           </>
         }
@@ -191,6 +222,8 @@ export default function BudgetsPage() {
           </Table>
         </div>
       )}
+
+      {paying && <PaymentDialog key={paying} choices={paymentChoices} onClose={() => setPaying(null)} />}
 
       <CalculatorDialog
         open={calcOpen}
