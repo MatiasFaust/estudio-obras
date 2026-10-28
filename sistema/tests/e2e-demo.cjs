@@ -212,7 +212,9 @@ async function logout(page) {
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
   await sleep(1000);
   const pagosTxt = await page.$eval('main', (e) => e.textContent);
-  check(pagosTxt.includes('Nuevo presupuesto') && pagosTxt.includes('2094') && pagosTxt.includes('Vivienda Acosta') && !pagosTxt.includes('Creada el'), 'menú Presupuestos: solo los presupuestos, con "Nuevo presupuesto"');
+  check(['N.º', 'Padrón', 'Cliente', 'Servicio', 'Avance', 'Honorarios'].every((h) => pagosTxt.includes(h)) && pagosTxt.includes('2094') && pagosTxt.includes('Familia Ejemplo Acosta') && !pagosTxt.includes('Creada el'),
+    'menú Presupuestos: tabla con N.º, padrón, cliente, servicio, avance y honorarios');
+  check(!!(await page.$$eval('main button', (bs) => bs.some((b) => b.textContent.trim() === 'Presupuesto'))), 'menú Presupuestos: botón "+ Presupuesto" arriba');
   await page.goto(`${BASE}/obras/p1`, { waitUntil: 'networkidle2' });
   await sleep(1000);
   const resumenTxt = await page.$eval('main', (e) => e.textContent);
@@ -257,8 +259,9 @@ async function logout(page) {
   await sleep(300);
   check((await page.$eval('main', (e) => e.textContent)).includes('$ 35.700'), 'forma de pago: calcula el 35% de $ 102.000');
   await clickText(page, 'button', 'Guardar');
-  await page.waitForFunction(() => /\/presupuestos\/[^/]+$/.test(location.pathname) && !location.pathname.endsWith('/nuevo'), { timeout: 10000 }).catch(() => {});
-  check(await page.evaluate(() => !location.pathname.endsWith('/nuevo')), 'presupuesto guardado en la obra');
+  await page.waitForFunction(() => /^\/pagos\/[^/]+$/.test(location.pathname) && !location.pathname.endsWith('/nuevo'), { timeout: 10000 }).catch(() => {});
+  check(await page.evaluate(() => /^\/pagos\/[^/]+$/.test(location.pathname) && !location.pathname.endsWith('/nuevo')), 'presupuesto guardado (se edita dentro de Presupuestos)');
+  check((await page.$eval('main', (e) => e.textContent)).includes('Vivienda Acosta'), 'el presupuesto nuevo desde la obra queda vinculado a esa obra');
   await sleep(800);
   const pdfPromise = catchPdf();
   await clickText(page, 'button', 'Descargar PDF');
@@ -312,15 +315,20 @@ async function logout(page) {
   await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
   await page.keyboard.press('Escape');
   await sleep(500);
-  await clickText(page, 'button', 'Nuevo presupuesto');
+  // "+ Presupuesto" abre una ventana con las dos opciones
+  await clickText(page, 'main button', 'Presupuesto');
   await sleep(500);
-  await page.click('[role=dialog] [aria-label="Obra"]');
+  const choice = await page.$eval('[role=dialog]', (e) => e.textContent);
+  check(choice.includes('Presupuesto con hoja membretada') && choice.includes('Presupuesto manual con costo fijo'), '"+ Presupuesto": ventana con las dos opciones');
+  await clickText(page, '[role=dialog] button', 'Presupuesto con hoja membretada');
+  await page.waitForSelector('#bg-number', { timeout: 10000 });
+  await sleep(500);
+  check(await page.evaluate(() => location.pathname === '/pagos/nuevo'), 'hoja membretada: el editor queda dentro de Presupuestos');
+  await page.click('[aria-label="Obra"]');
   await sleep(400);
   await clickText(page, '[role=option]', 'Reforma Casa Silva');
   await sleep(300);
-  await clickText(page, '[role=dialog] button[type=submit]', 'Armar presupuesto');
-  await page.waitForSelector('#bg-number', { timeout: 10000 });
-  await sleep(500);
+  check((await page.$eval('#bg-client', (e) => e.value)).length > 0, 'al elegir la obra se completa el cliente');
   await page.type('#bg-number', '2097');
   await page.type('#bg-price', '400.000');
   await page.click('[aria-label="Estado"]');
@@ -334,6 +342,63 @@ async function logout(page) {
   const p3 = await page.$eval('main', (e) => e.textContent);
   check(p3.includes('Monto acordado$ 400.000,00') && p3.includes('Según el presupuesto 2097, aceptado.'), 'presupuesto aceptado → monto acordado de la obra ($ 400.000)');
   check(p3.includes('Pagos recibidos') && p3.includes('Presupuestos de esta obra') && p3.includes('2097'), 'la obra muestra el avance de pagos y sus presupuestos juntos');
+
+  // Presupuesto manual con costo fijo, sin obra: queda en la tabla, sin PDF
+  await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
+  await page.keyboard.press('Escape');
+  await sleep(500);
+  await clickText(page, 'main button', 'Presupuesto');
+  await sleep(500);
+  await clickText(page, '[role=dialog] button', 'Presupuesto manual con costo fijo');
+  await page.waitForSelector('#mb-client', { timeout: 5000 });
+  await clickText(page, '[role=dialog] button[type=submit]', 'Guardar presupuesto');
+  await sleep(300);
+  const manualErr = await page.$eval('[role=dialog]', (e) => e.textContent);
+  check(manualErr.includes('Ingresá el cliente') && manualErr.includes('Ingresá los honorarios'), 'manual: pide cliente, servicio y honorarios');
+  await page.type('#mb-client', 'Cliente Manual Prueba');
+  await page.type('#mb-padron', '7788');
+  await page.type('#mb-service', 'Regularización');
+  await page.type('#mb-price', '85.000');
+  await page.type('#mb-number', '3001');
+  await clickText(page, '[role=dialog] button[type=submit]', 'Guardar presupuesto');
+  await sleep(1200);
+  check(!(await page.$('#mb-client')), 'manual: al guardar se cierra la ventana');
+  const manualRow = await page.$$eval('main tbody tr', (rows) => rows.map((r) => r.textContent).find((t) => t.includes('3001')) ?? '');
+  check(manualRow.includes('7788') && manualRow.includes('Cliente Manual Prueba') && manualRow.includes('Regularización') && manualRow.includes('Pendiente') && manualRow.includes('$ 85.000'),
+    'manual: aparece en la tabla con padrón, cliente, servicio, avance y honorarios');
+  check(!(await page.$('[aria-label="Descargar PDF de 3001"]')) && !!(await page.$('[aria-label="Descargar PDF de 2097"]')), 'PDF solo en los presupuestos con hoja membretada');
+  // Cambiar el avance desde la tabla
+  await page.click('[aria-label="Cambiar avance de 3001"]');
+  await sleep(400);
+  await clickText(page, '[role=menuitemradio]', 'En ejecución');
+  await sleep(1000);
+  const manualRow2 = await page.$$eval('main tbody tr', (rows) => rows.map((r) => r.textContent).find((t) => t.includes('3001')) ?? '');
+  check(manualRow2.includes('En ejecución'), 'cambia el avance desde la tabla');
+  // Buscar por padrón y filtrar por avance
+  await page.type('[aria-label="Buscar presupuestos"]', '7788');
+  await sleep(400);
+  check((await page.$$('main tbody tr')).length === 1, 'búsqueda por padrón');
+  await page.click('[aria-label="Buscar presupuestos"]', { clickCount: 3 });
+  await page.keyboard.press('Backspace');
+  await page.click('[aria-label="Filtrar por avance"]');
+  await sleep(400);
+  await clickText(page, '[role=option]', 'Aceptado');
+  await sleep(400);
+  const accepted = await page.$$eval('main tbody tr', (rows) => rows.map((r) => r.textContent));
+  check(accepted.length >= 1 && accepted.every((t) => t.includes('Aceptado')), `filtro por avance: solo aceptados (${accepted.length})`);
+  // Editar el manual
+  await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
+  await page.keyboard.press('Escape');
+  await sleep(500);
+  await page.click('[aria-label="Editar 3001"]');
+  await page.waitForSelector('#mb-price', { timeout: 10000 });
+  check((await page.$eval('#mb-client', (e) => e.value)) === 'Cliente Manual Prueba', 'manual: se abre para editar');
+  // La dirección vieja dentro de la obra lleva al editor nuevo
+  await page.goto(`${BASE}/obras/p1/presupuestos/b1`, { waitUntil: 'networkidle2' });
+  await page.waitForFunction(() => location.pathname === '/pagos/b1', { timeout: 10000 }).catch(() => {});
+  check(await page.evaluate(() => location.pathname === '/pagos/b1'), 'dirección vieja del presupuesto redirige a Presupuestos');
 
   // --- Estudio de desarrollo (administradora de los dos estudios)
   check(!!(await page.$('nav[aria-label="Área"]')), 'botones de los dos estudios visibles arriba');

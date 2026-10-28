@@ -294,7 +294,9 @@ export type DevRentPaymentInput = Omit<DevRentPayment, "id" | "created_by" | "cr
 // ---- Presupuestos en PDF (solo administradores) ----
 
 export type IvaMode = "mas_iva" | "iva_incluido" | "sin_iva";
-export type BudgetStatus = "borrador" | "enviado" | "aceptado" | "rechazado";
+export type BudgetStatus = "pendiente" | "enviado" | "aceptado" | "en_ejecucion" | "finalizado" | "rechazado";
+/** Con hoja membretada (PDF formal) o manual con costo fijo (sin PDF) */
+export type BudgetKind = "membretado" | "manual";
 
 export interface PaymentTerm {
   /** Ej.: "al comenzar los trabajos" */
@@ -354,7 +356,14 @@ export interface BudgetSettings {
 
 export interface Budget {
   id: string;
-  project_id: string;
+  kind: BudgetKind;
+  /** Obra vinculada (opcional): con obra, el presupuesto aceptado pasa a ser su monto acordado */
+  project_id: string | null;
+  client_name: string;
+  padron: string;
+  address: string;
+  /** Servicio de arquitectura (ej.: "Proyecto de reforma") */
+  service: string;
   number: string;
   issued_on: string;
   recipient: string;

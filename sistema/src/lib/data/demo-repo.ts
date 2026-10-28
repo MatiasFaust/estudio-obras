@@ -43,7 +43,21 @@ function load(): DemoDB {
       if (!db.budgets) {
         Object.assign(db, createBudgetDemoData());
         localStorage.setItem(DB_KEY, JSON.stringify(db));
-      } else if (!db.budgetSettings.calc_types) {
+      } else if (db.budgets.some((b) => !b.kind || (b.status as string) === "borrador")) {
+        for (const b of db.budgets) {
+          if (!b.kind) {
+            const p = db.projects.find((x) => x.id === b.project_id);
+            Object.assign(b, {
+              kind: "membretado",
+              client_name: p?.client_id ? db.clients.find((c) => c.id === p.client_id)?.name ?? "" : "",
+              padron: p?.padron ?? "", address: p?.address ?? "", service: "",
+            });
+          }
+          if ((b.status as string) === "borrador") b.status = "pendiente";
+        }
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+      }
+      if (!db.budgetSettings.calc_types) {
         const { calc_types, wage_value, expenses_fixed, expenses_per_m2, iva_rate } = createBudgetDemoData().budgetSettings;
         Object.assign(db.budgetSettings, { calc_types, wage_value, expenses_fixed, expenses_per_m2, iva_rate });
         localStorage.setItem(DB_KEY, JSON.stringify(db));
@@ -120,7 +134,7 @@ function writeFinance(db: DemoDB, user: Profile, projectId: string, input: Finan
 
 /** Presupuesto aceptado → su precio pasa a ser el monto acordado de la obra */
 function acceptBudget(db: DemoDB, user: Profile, b: Budget) {
-  if (b.status !== "aceptado" || b.price === null) return;
+  if (!b.project_id || b.price === null || !["aceptado", "en_ejecucion", "finalizado"].includes(b.status)) return;
   writeFinance(db, user, b.project_id, {
     agreed_amount: b.price,
     currency: b.currency,
@@ -129,6 +143,11 @@ function acceptBudget(db: DemoDB, user: Profile, b: Budget) {
 }
 
 const budgetLabel = (b: Pick<Budget, "number">) => (b.number ? `el presupuesto ${b.number}` : "un presupuesto");
+/** Obra o cliente del presupuesto, para el historial */
+const budgetPlace = (db: DemoDB, b: Budget) => {
+  const p = b.project_id ? db.projects.find((x) => x.id === b.project_id) : undefined;
+  return p ? label(p) : b.client_name || "sin obra";
+};
 
 /** Mismas validaciones que la base */
 function checkBudget(b: Partial<Budget>) {
@@ -421,7 +440,8 @@ export function createDemoRepo(): Repo {
       db.notes = db.notes.filter((n) => n.project_id !== id);
       db.finances = db.finances.filter((f) => f.project_id !== id);
       db.payments = db.payments.filter((x) => x.project_id !== id);
-      db.budgets = db.budgets.filter((x) => x.project_id !== id);
+      // Como en la base: el presupuesto queda, sin obra
+      for (const x of db.budgets) if (x.project_id === id) x.project_id = null;
       db.activity.forEach((a) => {
         if (a.project_id === id) a.project_id = null;
       });
@@ -633,12 +653,12 @@ export function createDemoRepo(): Repo {
       const db = load();
       const user = requireUser(db);
       if (!isAdmin(user)) deny();
-      const p = findProject(db, input.project_id);
+      if (input.project_id) findProject(db, input.project_id);
       checkBudget(input);
       const b: Budget = { ...input, id: uid(), created_by: user.id, created_at: now(), updated_at: now() };
       db.budgets.push(b);
       acceptBudget(db, user, b);
-      log(db, user, { entity_type: "payment", entity_id: b.id, project_id: p.id, action: "created", summary: `creó ${budgetLabel(b)} en ${label(p)}` });
+      log(db, user, { entity_type: "payment", entity_id: b.id, project_id: b.project_id, action: "created", summary: `creó ${budgetLabel(b)} (${budgetPlace(db, b)})` });
       save(db);
       return b;
     },
@@ -649,13 +669,13 @@ export function createDemoRepo(): Repo {
       const b = db.budgets.find((x) => x.id === id);
       if (!b) throw new RepoError("El presupuesto no existe.");
       const next = { ...b, ...input, updated_at: now() };
+      if (next.project_id) findProject(db, next.project_id);
       checkBudget(next);
       const statusChanged = input.status !== undefined && input.status !== b.status;
       Object.assign(b, next);
       acceptBudget(db, user, b);
       if (statusChanged) {
-        const p = findProject(db, b.project_id);
-        log(db, user, { entity_type: "payment", entity_id: id, project_id: p.id, action: "updated", summary: `marcó ${budgetLabel(b)} de ${label(p)} como ${b.status}` });
+        log(db, user, { entity_type: "payment", entity_id: id, project_id: b.project_id, action: "updated", summary: `cambió ${budgetLabel(b)} (${budgetPlace(db, b)}) a ${b.status.replace("_", " ")}` });
       }
       save(db);
     },
@@ -666,8 +686,7 @@ export function createDemoRepo(): Repo {
       const b = db.budgets.find((x) => x.id === id);
       if (!b) throw new RepoError("El presupuesto no existe.");
       db.budgets = db.budgets.filter((x) => x.id !== id);
-      const p = findProject(db, b.project_id);
-      log(db, user, { entity_type: "payment", entity_id: id, project_id: p.id, action: "deleted", summary: `eliminó ${budgetLabel(b)} de ${label(p)}` });
+      log(db, user, { entity_type: "payment", entity_id: id, project_id: b.project_id, action: "deleted", summary: `eliminó ${budgetLabel(b)} (${budgetPlace(db, b)})` });
       save(db);
     },
     async getBudgetSettings() {

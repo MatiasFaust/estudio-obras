@@ -175,15 +175,28 @@ check(orphan.s === 0 && orphan.n === 0, 'eliminar obra borra sus etapas y notas'
 const budgetProj = (await db.query(`select id from projects where name = 'Obra SQL 2'`)).rows[0].id;
 const budget = (await as(ADMIN, `insert into budgets (project_id, number, recipient, price, payment_terms, includes)
   values ('${budgetProj}', '2094', 'Sr. Cliente', 102000, '[{"label":"al comenzar","percent":35}]', '["3 imágenes"]') returning id, status`)).rows[0];
-check(budget.status === 'borrador', 'presupuesto nuevo queda como borrador');
+check(budget.status === 'pendiente', 'presupuesto nuevo queda como pendiente');
 await as(ADMIN, `update budgets set status = 'aceptado' where id = '${budget.id}'`);
 check((await as(ADMIN, `select summary from activity_log where entity_id = '${budget.id}' order by id`)).rows.some((r) => r.summary.includes('2094') && r.summary.includes('aceptado')), 'historial registra el presupuesto y su estado');
 check(!!(await fails_(ADMIN, `insert into budgets (project_id, price) values ('${budgetProj}', -1)`)), 'rechaza precios negativos');
 // El presupuesto aceptado (2094, $ 102.000) pasa a ser el monto acordado de la obra
 const fin = (await db.query(`select agreed_amount::float as a, currency, notes from project_finances where project_id = '${budgetProj}'`)).rows[0];
 check(fin && fin.a === 102000 && fin.currency === 'UYU' && fin.notes.includes('2094'), `presupuesto aceptado → monto acordado de la obra (${fin ? fin.a + ' ' + fin.currency : 'sin monto'})`);
-await as(ADMIN, `insert into budgets (project_id, number, price, status) values ('${budgetProj}', '2096', 150000, 'borrador')`);
-check((await db.query(`select agreed_amount::float as a from project_finances where project_id = '${budgetProj}'`)).rows[0].a === 102000, 'un presupuesto en borrador no cambia el monto acordado');
+await as(ADMIN, `insert into budgets (project_id, number, price, status) values ('${budgetProj}', '2096', 150000, 'pendiente')`);
+check((await db.query(`select agreed_amount::float as a from project_finances where project_id = '${budgetProj}'`)).rows[0].a === 102000, 'un presupuesto pendiente no cambia el monto acordado');
+check(!!(await fails_(ADMIN, `insert into budgets (project_id, status) values ('${budgetProj}', 'borrador')`)), 'el estado "borrador" ya no existe (ahora es "pendiente")');
+// Presupuesto manual, sin obra: guarda su cliente, padrón y servicio
+const manual = (await as(ADMIN, `insert into budgets (kind, number, client_name, padron, service, price, status)
+  values ('manual', '2100', 'Cliente suelto', '1234', 'Regularización', 50000, 'aceptado') returning id, project_id, kind`)).rows[0];
+check(manual.kind === 'manual' && manual.project_id === null, 'presupuesto manual sin obra');
+check((await as(ADMIN, `select summary from activity_log where entity_id = '${manual.id}'`)).rows.some((r) => r.summary.includes('Cliente suelto')), 'historial de un presupuesto sin obra');
+check(!!(await fails_(ADMIN, `insert into budgets (kind) values ('otro')`)), 'solo dos tipos: membretado o manual');
+// Vincularlo después a una obra y pasarlo a "en ejecución" → monto acordado de esa obra
+const otherProj = (await as(ADMIN, `insert into projects (name, address) values ('Obra presupuesto manual', 'Calle 9') returning id`)).rows[0].id;
+await as(ADMIN, `update budgets set project_id = '${otherProj}', status = 'en_ejecucion' where id = '${manual.id}'`);
+check((await db.query(`select agreed_amount::float as a from project_finances where project_id = '${otherProj}'`)).rows[0]?.a === 50000, 'vinculado a una obra y en ejecución → monto acordado');
+await as(ADMIN, `delete from projects where id = '${otherProj}'`);
+check((await db.query(`select project_id from budgets where id = '${manual.id}'`)).rows[0]?.project_id === null, 'si se borra la obra, el presupuesto queda (sin obra)');
 check(!!(await fails_(ADMIN, `insert into budgets (project_id, includes) values ('${budgetProj}', '{"no":"lista"}')`)), 'lo que incluye tiene que ser una lista');
 check((await as(ARQ, `select id from budgets`)).rows.length === 0, 'arquitecto NO ve presupuestos');
 check(!!(await fails_(ARQ, `insert into budgets (project_id) values ('${budgetProj}')`)), 'arquitecto NO crea presupuestos');

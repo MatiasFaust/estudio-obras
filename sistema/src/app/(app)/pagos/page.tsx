@@ -3,31 +3,37 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Calculator, Download, FilePlus2, FileText, Lock, Search, Settings2 } from "lucide-react";
+import { ArrowLeft, Calculator, ChevronDown, Download, FileText, Lock, NotebookPen, Pencil, Plus, Search, Settings2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/common/empty-state";
-import { Field } from "@/components/common/field";
 import { PageHeader } from "@/components/common/page-header";
 import { SimpleSelect } from "@/components/common/simple-select";
 import { downloadBudgetPdf } from "@/components/budgets/budget-pdf";
-import { BUDGET_STATUS, BudgetStatusBadge } from "@/components/budgets/budget-status";
+import { BUDGET_KINDS, BUDGET_STATUS, BUDGET_STATUS_OPTIONS, BudgetStatusBadge } from "@/components/budgets/budget-status";
 import { CalculatorDialog } from "@/components/budgets/calculator-dialog";
 import { money } from "@/components/budgets/budget-text";
-import { useBudgets, useBudgetSettings, useClients, useProjects, useSession } from "@/lib/data/hooks";
+import { ManualBudgetForm } from "@/components/budgets/manual-budget-form";
+import { useAction, useBudgets, useBudgetSettings, useClients, useProjects, useRepo, useSession } from "@/lib/data/hooks";
 import { formatDate, matches } from "@/lib/format";
 import { can } from "@/lib/permissions";
-import type { Budget } from "@/lib/types";
+import type { Budget, BudgetStatus } from "@/lib/types";
 
-const STATUS_FILTER = [{ value: "", label: "Todos los estados" }].concat(
-  Object.entries(BUDGET_STATUS).map(([value, s]) => ({ value, label: s.label })),
+const STATUS_FILTER = [{ value: "", label: "Todos los avances" }].concat(BUDGET_STATUS_OPTIONS);
+const KIND_FILTER = [{ value: "", label: "Todos los tipos" }].concat(
+  Object.entries(BUDGET_KINDS).map(([value, k]) => ({ value, label: k.label })),
 );
 
-/** Presupuestos: el creador de presupuestos (todas las obras) */
+/** Presupuestos: lista de todos los presupuestos del estudio y creador */
 export default function BudgetsPage() {
   const router = useRouter();
+  const repo = useRepo();
+  const { run } = useAction();
   const { profile } = useSession();
   const allowed = can.viewFinances(profile);
   const budgets = useBudgets(allowed);
@@ -36,29 +42,25 @@ export default function BudgetsPage() {
   const clients = useClients();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
-  const [choosing, setChoosing] = useState(false);
-  const [projectId, setProjectId] = useState("");
+  const [kind, setKind] = useState("");
+  // Ventana de "+ Presupuesto": primero se elige el tipo; el manual se completa ahí mismo
+  const [creating, setCreating] = useState<null | "choose" | "manual">(null);
   const [busy, setBusy] = useState<string | null>(null);
   // La calculadora se abre sola al entrar a Presupuestos
   const [calcOpen, setCalcOpen] = useState(true);
 
   const projectById = useMemo(() => new Map((projects.data ?? []).map((p) => [p.id, p])), [projects.data]);
-  const clientName = useMemo(() => new Map((clients.data ?? []).map((c) => [c.id, c.name])), [clients.data]);
 
   if (!allowed) {
     return <EmptyState icon={Lock} title="Sin permiso" description="Los presupuestos son solo para administradores." />;
   }
 
-  const clientOf = (b: Budget) => {
-    const p = projectById.get(b.project_id);
-    return p?.client_id ? clientName.get(p.client_id) ?? "" : "";
-  };
   const all = budgets.data ?? [];
   const rows = all.filter((b) => {
-    const p = projectById.get(b.project_id);
-    return (!status || b.status === status) && matches(query, b.number, b.recipient, p?.name, p?.code, clientOf(b));
+    const p = b.project_id ? projectById.get(b.project_id) : undefined;
+    return (!status || b.status === status) && (!kind || b.kind === kind)
+      && matches(query, b.number, b.client_name, b.padron, b.service, b.address, p?.name, p?.code);
   });
-  const openProjects = (projects.data ?? []).filter((p) => p.status !== "archivada");
 
   async function download(b: Budget) {
     if (!settings.data) return;
@@ -70,6 +72,9 @@ export default function BudgetsPage() {
     }
   }
 
+  const changeStatus = (b: Budget, next: BudgetStatus) =>
+    next !== b.status && run(() => repo.updateBudget(b.id, { status: next }), `${b.number ? `Presupuesto ${b.number}` : "Presupuesto"}: ${BUDGET_STATUS[next].label}`);
+
   return (
     <>
       <PageHeader
@@ -79,7 +84,7 @@ export default function BudgetsPage() {
           <>
             <Button variant="outline" onClick={() => setCalcOpen(true)}><Calculator /> Calculadora</Button>
             <Link href="/pagos/plantilla" className={buttonVariants({ variant: "outline" })}><Settings2 /> Plantilla</Link>
-            <Button onClick={() => setChoosing(true)}><FilePlus2 /> Nuevo presupuesto</Button>
+            <Button onClick={() => setCreating("choose")}><Plus /> Presupuesto</Button>
           </>
         }
       />
@@ -87,9 +92,10 @@ export default function BudgetsPage() {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-72">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Número, obra, cliente…" className="pl-8" aria-label="Buscar presupuestos" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Número, cliente, padrón…" className="pl-8" aria-label="Buscar presupuestos" />
         </div>
-        <SimpleSelect value={status} onChange={setStatus} options={STATUS_FILTER} placeholder="Todos los estados" className="w-44" aria-label="Filtrar por estado" />
+        <SimpleSelect value={status} onChange={setStatus} options={STATUS_FILTER} placeholder="Todos los avances" className="w-44" aria-label="Filtrar por avance" />
+        <SimpleSelect value={kind} onChange={setKind} options={KIND_FILTER} placeholder="Todos los tipos" className="w-52" aria-label="Filtrar por tipo" />
       </div>
 
       {budgets.isLoading || projects.isLoading ? (
@@ -98,45 +104,71 @@ export default function BudgetsPage() {
         <EmptyState
           icon={FileText}
           title={all.length ? "Ningún presupuesto coincide con la búsqueda" : "Todavía no hay presupuestos"}
-          action={!all.length && <Button onClick={() => setChoosing(true)}><FilePlus2 /> Nuevo presupuesto</Button>}
+          action={!all.length && <Button onClick={() => setCreating("choose")}><Plus /> Presupuesto</Button>}
         />
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Número</TableHead>
-                <TableHead>Obra</TableHead>
-                <TableHead className="hidden md:table-cell">Cliente</TableHead>
-                <TableHead className="hidden sm:table-cell">Fecha</TableHead>
-                <TableHead className="text-right">Precio</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="w-20" />
+                <TableHead>N.º</TableHead>
+                <TableHead className="hidden sm:table-cell">Padrón</TableHead>
+                <TableHead>Cliente</TableHead>
+                <TableHead className="hidden md:table-cell">Servicio</TableHead>
+                <TableHead>Avance</TableHead>
+                <TableHead className="text-right">Honorarios</TableHead>
+                <TableHead className="w-24" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((b) => {
-                const p = projectById.get(b.project_id);
-                return (
-                  <TableRow key={b.id}>
-                    <TableCell>
-                      <Link href={`/obras/${b.project_id}/presupuestos/${b.id}`} className="font-medium hover:underline">{b.number || "Sin número"}</Link>
-                    </TableCell>
-                    <TableCell className="max-w-56">
-                      <Link href={`/obras/${b.project_id}?tab=pagos`} className="block truncate hover:underline">{p?.name ?? "—"}</Link>
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground md:table-cell">{clientOf(b) || b.recipient || "—"}</TableCell>
-                    <TableCell className="hidden text-muted-foreground sm:table-cell">{formatDate(b.issued_on)}</TableCell>
-                    <TableCell className="text-right whitespace-nowrap tabular-nums">{b.price !== null ? money(b.price, b.currency) : "—"}</TableCell>
-                    <TableCell><BudgetStatusBadge status={b.status} /></TableCell>
-                    <TableCell className="text-right">
-                      <Button size="sm" variant="outline" disabled={busy === b.id || !settings.data} onClick={() => download(b)}>
-                        <Download /> PDF
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {rows.map((b) => (
+                <TableRow key={b.id}>
+                  <TableCell>
+                    <Link href={`/pagos/${b.id}`} className="font-medium hover:underline">{b.number || "Sin número"}</Link>
+                    <span className="block text-xs text-muted-foreground">{BUDGET_KINDS[b.kind].short} · {formatDate(b.issued_on)}</span>
+                  </TableCell>
+                  <TableCell className="hidden tabular-nums sm:table-cell">{b.padron || "—"}</TableCell>
+                  <TableCell className="max-w-52">
+                    <span className="block truncate">{b.client_name || "—"}</span>
+                    {b.project_id && projectById.get(b.project_id) && (
+                      <span className="block truncate text-xs text-muted-foreground">{projectById.get(b.project_id)!.name}</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="hidden max-w-56 truncate text-muted-foreground md:table-cell">{b.service || "—"}</TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <button type="button" className="inline-flex items-center gap-0.5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Cambiar avance de ${b.number || "presupuesto"}`}>
+                            <BudgetStatusBadge status={b.status} />
+                            <ChevronDown className="size-3 text-muted-foreground" />
+                          </button>
+                        }
+                      />
+                      <DropdownMenuContent align="start" className="w-44">
+                        <DropdownMenuRadioGroup value={b.status} onValueChange={(v) => changeStatus(b, v as BudgetStatus)}>
+                          {BUDGET_STATUS_OPTIONS.map((o) => (
+                            <DropdownMenuRadioItem key={o.value} value={o.value}>{o.label}</DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                  <TableCell className="text-right whitespace-nowrap tabular-nums">{b.price !== null ? money(b.price, b.currency) : "—"}</TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-1">
+                      {b.kind === "membretado" && (
+                        <Button size="icon-sm" variant="outline" disabled={busy === b.id || !settings.data} onClick={() => download(b)} aria-label={`Descargar PDF de ${b.number || "presupuesto"}`} title="Descargar PDF">
+                          <Download />
+                        </Button>
+                      )}
+                      <Link href={`/pagos/${b.id}`} className={buttonVariants({ size: "icon-sm", variant: "ghost" })} aria-label={`Editar ${b.number || "presupuesto"}`} title="Editar">
+                        <Pencil />
+                      </Link>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </div>
@@ -150,38 +182,72 @@ export default function BudgetsPage() {
         clients={clients.data ?? []}
       />
 
-      <Dialog open={choosing} onOpenChange={setChoosing}>
-        <DialogContent>
-          <form
-            className="grid gap-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (projectId) router.push(`/obras/${projectId}/presupuestos/nuevo`);
-            }}
-          >
-            <DialogHeader>
-              <DialogTitle>Nuevo presupuesto</DialogTitle>
-              <DialogDescription>Elegí la obra. El presupuesto arranca con la plantilla y los datos de la obra (cliente y padrón).</DialogDescription>
-            </DialogHeader>
-            <Field label="Obra">
-              <SimpleSelect
-                value={projectId}
-                onChange={setProjectId}
-                aria-label="Obra"
-                placeholder="Elegí una obra"
-                options={openProjects.map((p) => ({ value: p.id, label: `${p.name}${p.client_id && clientName.get(p.client_id) ? ` · ${clientName.get(p.client_id)}` : ""}` }))}
-              />
-            </Field>
-            {openProjects.length === 0 && (
-              <p className="text-sm text-muted-foreground">Primero creá la obra en <Link href="/obras/nueva" className="text-primary hover:underline">Obras</Link>.</p>
-            )}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setChoosing(false)}>Cancelar</Button>
-              <Button type="submit" disabled={!projectId}>Armar presupuesto</Button>
-            </DialogFooter>
-          </form>
+      <Dialog open={creating !== null} onOpenChange={(o) => !o && setCreating(null)}>
+        <DialogContent className={creating === "manual" ? "max-h-[92dvh] overflow-y-auto sm:max-w-lg" : "sm:max-w-lg"}>
+          {creating === "manual" ? (
+            <>
+              <DialogHeader>
+                <button type="button" onClick={() => setCreating("choose")} className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                  <ArrowLeft className="size-3.5" /> Volver
+                </button>
+                <DialogTitle>Presupuesto manual con costo fijo</DialogTitle>
+                <DialogDescription>Para registrar un importe ya acordado. No genera PDF.</DialogDescription>
+              </DialogHeader>
+              {settings.data && (
+                <ManualBudgetForm
+                  settings={settings.data}
+                  projects={projects.data ?? []}
+                  clients={clients.data ?? []}
+                  onSaved={() => setCreating(null)}
+                  onCancel={() => setCreating(null)}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Nuevo presupuesto</DialogTitle>
+                <DialogDescription>¿Qué tipo de presupuesto querés hacer?</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-2">
+                <ChoiceButton
+                  icon={FileText}
+                  title="Presupuesto con hoja membretada"
+                  description="Con la hoja del estudio: descripción del trabajo, honorarios y condiciones de pago. Se puede ver, descargar en PDF e imprimir."
+                  onClick={() => {
+                    setCreating(null);
+                    router.push("/pagos/nuevo");
+                  }}
+                />
+                <ChoiceButton
+                  icon={NotebookPen}
+                  title="Presupuesto manual con costo fijo"
+                  description="Cliente, servicio y honorarios ya acordados. Queda registrado en la tabla, sin PDF."
+                  onClick={() => setCreating("manual")}
+                />
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function ChoiceButton({
+  icon: Icon, title, description, onClick,
+}: { icon: React.ElementType; title: string; description: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-start gap-3 rounded-lg border bg-card p-3 text-left transition-colors outline-none hover:border-primary/40 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <span className="grid size-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><Icon className="size-4.5" /></span>
+      <span className="grid gap-0.5">
+        <span className="font-medium">{title}</span>
+        <span className="text-xs text-muted-foreground">{description}</span>
+      </span>
+    </button>
   );
 }

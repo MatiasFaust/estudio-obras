@@ -133,7 +133,8 @@ export function BudgetDocument({ budget: b, settings: t }: { budget: Budget; set
         </View>
         <Text style={s.nextDate} fixed render={({ pageNumber }) => (pageNumber > 1 ? longDate(b.issued_on) : "")} />
 
-        {b.recipient.trim() && <Text style={s.recipient}>{b.recipient}</Text>}
+        {/* "Para": lo escrito a mano (ej.: "Sr. Nicolás") o, si está vacío, el cliente */}
+        {(b.recipient.trim() || b.client_name.trim()) && <Text style={s.recipient}>{b.recipient.trim() || b.client_name.trim()}</Text>}
         {t.greeting.trim() && <Text style={s.p}>{t.greeting}</Text>}
         {b.intro.trim() && <Marked text={b.intro} style={s.intro} />}
 
@@ -273,4 +274,20 @@ export async function previewBudgetPdf(budget: Budget, settings: BudgetSettings,
   const url = URL.createObjectURL(blob);
   if (win) win.location.href = url;
   else window.open(url, "_blank", "noopener");
+}
+
+/** Abre el cuadro de imprimir del navegador con el PDF (sin descargarlo) */
+export async function printBudgetPdf(budget: Budget, settings: BudgetSettings) {
+  const blob = await budgetPdfBlob(budget, settings);
+  const url = URL.createObjectURL(blob);
+  const frame = document.createElement("iframe");
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+  frame.src = url;
+  frame.onload = () => {
+    frame.contentWindow?.focus();
+    frame.contentWindow?.print();
+    // Se limpia después: el cuadro de imprimir necesita el documento abierto
+    setTimeout(() => { frame.remove(); URL.revokeObjectURL(url); }, 60_000);
+  };
+  document.body.append(frame);
 }

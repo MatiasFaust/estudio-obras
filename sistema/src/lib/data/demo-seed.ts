@@ -337,7 +337,8 @@ export function createBudgetDemoData(): Pick<DemoDB, "budgets" | "budgetSettings
     updated_at: stamp(-30),
   };
   const budgets: Budget[] = [{
-    id: "b1", project_id: "p1", number: "2094", issued_on: day(-20), recipient: "Familia Ejemplo Acosta",
+    id: "b1", kind: "membretado", project_id: "p1", client_name: "Familia Ejemplo Acosta", padron: "0001",
+    address: "Calle Ficticia 100", service: "Proyecto de vivienda", number: "2094", issued_on: day(-20), recipient: "Familia Ejemplo Acosta",
     intro: "De acuerdo a vuestra amable solicitud tengo el agrado de presupuestar los trabajos de presentación de proyecto de vivienda, área aproximada 120 m², padrón 9001.",
     price: 48000, currency: "USD", iva_mode: "mas_iva", payment_terms, includes,
     excludes: "No se incluye Dirección de Obra.", expenses_text: budgetSettings.expenses_text, expenses_amount: 1200,

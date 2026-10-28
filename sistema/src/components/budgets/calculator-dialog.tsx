@@ -13,6 +13,7 @@ import type { BudgetSettings, Client, Project } from "@/lib/types";
 import { parseMoney } from "@/lib/validation";
 import { money } from "./budget-text";
 import { calculate, prefillQuery } from "./calculator";
+import { NO_PROJECT, projectOptions } from "./manual-budget-form";
 
 function Row({ label, value, hint, strong }: { label: string; value: string; hint?: string; strong?: boolean }) {
   return (
@@ -36,14 +37,12 @@ export function CalculatorDialog({
   const router = useRouter();
   const [typeName, setTypeName] = useState("");
   const [area, setArea] = useState("");
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState(NO_PROJECT);
 
   const types = settings?.calc_types ?? [];
   const type = types.find((t) => t.name === typeName) ?? types[0];
   const m2 = parseMoney(area) ?? NaN;
   const r = settings && type ? calculate(settings, type, m2) : null;
-  const clientName = new Map(clients.map((c) => [c.id, c.name]));
-  const openProjects = projects.filter((p) => p.status !== "archivada");
   const $ = (n: number | null) => (n === null ? "—" : money(n, "UYU"));
 
   return (
@@ -102,20 +101,20 @@ export function CalculatorDialog({
                 className="grid gap-2 rounded-lg bg-muted/50 p-3"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (!projectId || !type) return;
-                  router.push(`/obras/${projectId}/presupuestos/nuevo?${prefillQuery(type.name, m2, r)}`);
+                  if (!type) return;
+                  const obra = projectId === NO_PROJECT ? "" : `obra=${projectId}&`;
+                  router.push(`/pagos/nuevo?${obra}${prefillQuery(type.name, m2, r)}`);
                 }}
               >
-                <Field label="Armar un presupuesto con esto para la obra">
+                <Field label="Armar un presupuesto con hoja membretada con esto" hint="La obra es opcional.">
                   <SimpleSelect
                     value={projectId}
                     onChange={setProjectId}
-                    placeholder="Elegí una obra"
                     aria-label="Obra del presupuesto"
-                    options={openProjects.map((p) => ({ value: p.id, label: `${p.name}${p.client_id && clientName.get(p.client_id) ? ` · ${clientName.get(p.client_id)}` : ""}` }))}
+                    options={projectOptions(projects, clients)}
                   />
                 </Field>
-                <Button type="submit" disabled={!projectId} className="justify-self-end"><FilePlus2 /> Armar presupuesto</Button>
+                <Button type="submit" className="justify-self-end"><FilePlus2 /> Armar presupuesto</Button>
               </form>
             )}
           </div>

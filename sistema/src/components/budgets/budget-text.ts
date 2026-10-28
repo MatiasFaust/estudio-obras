@@ -1,6 +1,6 @@
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
-import type { Budget, BudgetSettings, Currency, IvaMode, Project } from "@/lib/types";
+import type { Budget, BudgetInput, BudgetKind, BudgetSettings, Currency, IvaMode, Project } from "@/lib/types";
 
 // Textos del presupuesto que comparten el editor y el PDF.
 
@@ -37,14 +37,16 @@ export function longDate(iso: string): string {
 }
 
 /** Párrafo de presentación a partir de la plantilla y los datos de la obra */
-export function fillIntro(template: string, data: { trabajo: string; area: string; padron: string }): string {
+export function fillIntro(template: string, data: { trabajo: string; area: string; padron: string; direccion?: string }): string {
   return template
     .replaceAll("{trabajo}", data.trabajo || "…")
     .replaceAll("{area}", data.area || "…")
-    .replaceAll("{padron}", data.padron || "…");
+    .replaceAll("{padron}", data.padron || "…")
+    .replaceAll("{direccion}", data.direccion || "…");
 }
 
-export const defaultTrabajo = (p: Project) => `presentación de proyecto de ${p.name.toLowerCase()}`;
+/** "Proyecto de reforma" → "presentación de proyecto de reforma" (para el párrafo de presentación) */
+export const trabajoFrom = (service: string) => (service.trim() ? `presentación de ${service.trim().charAt(0).toLowerCase()}${service.trim().slice(1)}` : "");
 
 /**
  * Formato mínimo dentro de los textos: **negrita** y __subrayado__.
@@ -70,15 +72,25 @@ export function parseMarks(text: string): Span[] {
   return out;
 }
 
-/** Valores iniciales de un presupuesto nuevo, tomados de la plantilla y de la obra */
-export function newBudgetFrom(settings: BudgetSettings, project: Project, clientName: string | undefined) {
-  const trabajo = defaultTrabajo(project);
+/** Valores iniciales de un presupuesto nuevo, tomados de la plantilla y (si hay) de la obra */
+export function newBudgetFrom(
+  settings: BudgetSettings,
+  opts: { project?: Project | null; clientName?: string; kind?: BudgetKind; service?: string; area?: string } = {},
+): BudgetInput {
+  const { project, clientName = "", kind = "membretado", service = "", area = "" } = opts;
   return {
-    project_id: project.id,
+    kind,
+    project_id: project?.id ?? null,
+    client_name: clientName,
+    padron: project?.padron ?? "",
+    address: project?.address ?? "",
+    service,
     number: "",
     issued_on: format(new Date(), "yyyy-MM-dd"),
-    recipient: clientName ?? "",
-    intro: fillIntro(settings.intro, { trabajo, area: "", padron: project.padron ?? "" }),
+    recipient: "",
+    intro: kind === "manual" ? "" : fillIntro(settings.intro, {
+      trabajo: trabajoFrom(service), area, padron: project?.padron ?? "", direccion: project?.address ?? "",
+    }),
     price: null,
     currency: "UYU" as Currency,
     iva_mode: "mas_iva" as IvaMode,
@@ -89,7 +101,7 @@ export function newBudgetFrom(settings: BudgetSettings, project: Project, client
     expenses_amount: null,
     wages_days: null,
     wages_amount: null,
-    note: settings.note,
-    status: "borrador" as const,
+    note: kind === "manual" ? "" : settings.note,
+    status: "pendiente",
   };
 }
