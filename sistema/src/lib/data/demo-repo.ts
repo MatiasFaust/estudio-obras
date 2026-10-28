@@ -149,6 +149,30 @@ const budgetPlace = (db: DemoDB, b: Budget) => {
   return p ? label(p) : b.client_name || "sin obra";
 };
 
+/** Obra o presupuesto (sin obra) de un pago: lugar para el historial y moneda acordada */
+function paymentOwner(db: DemoDB, pay: Pick<Payment, "project_id" | "budget_id">, fallback: Currency) {
+  if (!pay.project_id === !pay.budget_id) throw new RepoError("El pago tiene que ser de una obra o de un presupuesto.");
+  if (pay.project_id) {
+    const p = findProject(db, pay.project_id);
+    return { place: label(p), target: db.finances.find((f) => f.project_id === p.id)?.currency ?? fallback };
+  }
+  const b = db.budgets.find((x) => x.id === pay.budget_id);
+  if (!b) throw new RepoError("El presupuesto no existe.");
+  return { place: `${budgetLabel(b)}${b.client_name ? ` (${b.client_name})` : ""}`, target: b.currency };
+}
+
+/** Igual que la base: presupuesto vinculado a una obra → sus pagos pasan a la obra; si cambia su moneda, se recalculan */
+function moveBudgetPayments(db: DemoDB, before: Budget, b: Budget) {
+  const own = db.payments.filter((x) => x.budget_id === b.id);
+  const linked = !before.project_id && !!b.project_id;
+  if (!linked && before.currency === b.currency) return;
+  const target = linked ? db.finances.find((f) => f.project_id === b.project_id)?.currency : b.currency;
+  for (const pay of own) {
+    pay.amount_contract = target ? paymentInContract(pay.amount, pay.currency, pay.exchange_rate, target) : pay.amount;
+    if (linked) Object.assign(pay, { project_id: b.project_id, budget_id: null });
+  }
+}
+
 /** Mismas validaciones que la base */
 function checkBudget(b: Partial<Budget>) {
   const neg = (n: number | null | undefined) => n !== null && n !== undefined && n < 0;
@@ -609,14 +633,13 @@ export function createDemoRepo(): Repo {
       const db = load();
       const user = requireUser(db);
       if (!isAdmin(user)) deny();
-      const p = findProject(db, input.project_id);
-      const target = db.finances.find((f) => f.project_id === p.id)?.currency ?? input.currency;
+      const { place, target } = paymentOwner(db, input, input.currency);
       const pay: Payment = {
         ...input, id: uid(), amount_contract: paymentInContract(input.amount, input.currency, input.exchange_rate, target),
         created_by: user.id, created_at: now(), updated_at: now(),
       };
       db.payments.push(pay);
-      log(db, user, { entity_type: "payment", entity_id: pay.id, project_id: p.id, action: "created", summary: `registró un pago de ${formatMoney(pay.amount, pay.currency)} en ${label(p)}` });
+      log(db, user, { entity_type: "payment", entity_id: pay.id, project_id: pay.project_id, action: "created", summary: `registró un pago de ${formatMoney(pay.amount, pay.currency)} en ${place}` });
       save(db);
     },
     async updatePayment(id, input) {
@@ -625,10 +648,9 @@ export function createDemoRepo(): Repo {
       if (!isAdmin(user)) deny();
       const pay = db.payments.find((x) => x.id === id);
       if (!pay) throw new RepoError("El pago no existe.");
-      const p = findProject(db, pay.project_id);
-      const target = db.finances.find((f) => f.project_id === p.id)?.currency ?? input.currency;
+      const { place, target } = paymentOwner(db, input, input.currency);
       Object.assign(pay, input, { amount_contract: paymentInContract(input.amount, input.currency, input.exchange_rate, target), updated_at: now() });
-      log(db, user, { entity_type: "payment", entity_id: id, project_id: p.id, action: "updated", summary: `modificó un pago de ${formatMoney(pay.amount, pay.currency)} en ${label(p)}` });
+      log(db, user, { entity_type: "payment", entity_id: id, project_id: pay.project_id, action: "updated", summary: `modificó un pago de ${formatMoney(pay.amount, pay.currency)} en ${place}` });
       save(db);
     },
     async deletePayment(id) {
@@ -637,9 +659,9 @@ export function createDemoRepo(): Repo {
       if (!isAdmin(user)) deny();
       const pay = db.payments.find((x) => x.id === id);
       if (!pay) throw new RepoError("El pago no existe.");
-      const p = findProject(db, pay.project_id);
+      const { place } = paymentOwner(db, pay, pay.currency);
       db.payments = db.payments.filter((x) => x.id !== id);
-      log(db, user, { entity_type: "payment", entity_id: id, project_id: p.id, action: "deleted", summary: `eliminó un pago de ${formatMoney(pay.amount, pay.currency)} en ${label(p)}` });
+      log(db, user, { entity_type: "payment", entity_id: id, project_id: pay.project_id, action: "deleted", summary: `eliminó un pago de ${formatMoney(pay.amount, pay.currency)} en ${place}` });
       save(db);
     },
 
@@ -672,8 +694,10 @@ export function createDemoRepo(): Repo {
       if (next.project_id) findProject(db, next.project_id);
       checkBudget(next);
       const statusChanged = input.status !== undefined && input.status !== b.status;
+      const before = { ...b };
       Object.assign(b, next);
       acceptBudget(db, user, b);
+      moveBudgetPayments(db, before, b);
       if (statusChanged) {
         log(db, user, { entity_type: "payment", entity_id: id, project_id: b.project_id, action: "updated", summary: `cambió ${budgetLabel(b)} (${budgetPlace(db, b)}) a ${b.status.replace("_", " ")}` });
       }
@@ -686,6 +710,7 @@ export function createDemoRepo(): Repo {
       const b = db.budgets.find((x) => x.id === id);
       if (!b) throw new RepoError("El presupuesto no existe.");
       db.budgets = db.budgets.filter((x) => x.id !== id);
+      db.payments = db.payments.filter((x) => x.budget_id !== id);
       log(db, user, { entity_type: "payment", entity_id: id, project_id: b.project_id, action: "deleted", summary: `eliminó ${budgetLabel(b)} (${budgetPlace(db, b)})` });
       save(db);
     },

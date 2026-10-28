@@ -10,10 +10,10 @@ import { ProgressBar } from "@/components/common/progress-bar";
 import { PAYMENT_METHODS } from "@/lib/constants";
 import { useAction, useFinances, usePayments, useRepo } from "@/lib/data/hooks";
 import { formatDate, formatMoney } from "@/lib/format";
-import type { Payment, Project } from "@/lib/types";
+import type { Budget, Payment, Project } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { FinanceDialog, PaymentDialog } from "./payment-dialogs";
-import { summarize } from "./summary";
+import { budgetAgreement, summarize } from "./summary";
 
 function Figure({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
@@ -24,8 +24,8 @@ function Figure({ label, value, tone }: { label: string; value: string; tone?: s
   );
 }
 
-/** Avance de pago de una obra (solo administradores) */
-export function PaymentsPanel({ project }: { project: Project }) {
+/** Avance de pago de una obra o de un presupuesto sin obra (solo administradores) */
+export function PaymentsPanel({ project, budget }: { project: Project; budget?: undefined } | { budget: Budget; project?: undefined }) {
   const repo = useRepo();
   const { run } = useAction();
   const finances = useFinances(true);
@@ -34,9 +34,10 @@ export function PaymentsPanel({ project }: { project: Project }) {
   const [editing, setEditing] = useState<{ payment: Payment | null; key: number } | null>(null);
   const [deleting, setDeleting] = useState<Payment | null>(null);
 
-  const finance = finances.data?.find((f) => f.project_id === project.id);
-  const own = (payments.data ?? []).filter((p) => p.project_id === project.id);
-  const s = summarize(finance, own);
+  const finance = project && finances.data?.find((f) => f.project_id === project.id);
+  const own = (payments.data ?? []).filter((p) => (project ? p.project_id === project.id : p.budget_id === budget!.id));
+  // En un presupuesto sin obra, lo acordado son sus honorarios
+  const s = summarize(project ? finance : budgetAgreement(budget!), own);
 
   if (finances.isLoading || payments.isLoading) return <p className="text-sm text-muted-foreground">Cargando pagos…</p>;
 
@@ -45,14 +46,16 @@ export function PaymentsPanel({ project }: { project: Project }) {
       <div className="rounded-xl border bg-card p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="grid flex-1 grid-cols-2 gap-4 sm:grid-cols-4">
-            <Figure label="Monto acordado" value={formatMoney(s.agreed, s.currency)} />
+            <Figure label={project ? "Monto acordado" : "Honorarios"} value={formatMoney(s.agreed, s.currency)} />
             <Figure label="Pagado" value={formatMoney(s.paid, s.currency)} tone="text-emerald-700 dark:text-emerald-400" />
             <Figure label="Saldo pendiente" value={formatMoney(s.balance, s.currency)} tone={s.balance && s.balance > 0 ? "text-amber-700 dark:text-amber-400" : undefined} />
             <Figure label="Último pago" value={s.lastPaidOn ? formatDate(s.lastPaidOn) : "—"} />
           </div>
-          <Button variant="outline" size="sm" onClick={() => setEditingFinance(true)}>
-            <Pencil /> {finance ? "Editar monto acordado" : "Fijar monto acordado"}
-          </Button>
+          {project && (
+            <Button variant="outline" size="sm" onClick={() => setEditingFinance(true)}>
+              <Pencil /> {finance ? "Editar monto acordado" : "Fijar monto acordado"}
+            </Button>
+          )}
         </div>
         {s.percent !== null ? (
           <div className="mt-4">
@@ -60,7 +63,9 @@ export function PaymentsPanel({ project }: { project: Project }) {
             <ProgressBar value={s.percent} />
           </div>
         ) : (
-          <p className="mt-3 text-xs text-muted-foreground">Fijá el monto acordado para ver el porcentaje pagado y el saldo.</p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            {project ? "Fijá el monto acordado" : "Poné los honorarios del presupuesto"} para ver el porcentaje pagado y el saldo.
+          </p>
         )}
         {finance?.notes && <p className="mt-3 text-xs text-muted-foreground">{finance.notes}</p>}
       </div>
@@ -116,9 +121,16 @@ export function PaymentsPanel({ project }: { project: Project }) {
         </div>
       )}
 
-      {editingFinance && <FinanceDialog projectId={project.id} finance={finance} onClose={() => setEditingFinance(false)} />}
+      {editingFinance && project && <FinanceDialog projectId={project.id} finance={finance} onClose={() => setEditingFinance(false)} />}
       {editing && (
-        <PaymentDialog key={editing.key} projectId={project.id} contractCurrency={s.currency} payment={editing.payment} onClose={() => setEditing(null)} />
+        <PaymentDialog
+          key={editing.key}
+          projectId={project?.id}
+          budgetId={budget?.id}
+          contractCurrency={s.currency}
+          payment={editing.payment}
+          onClose={() => setEditing(null)}
+        />
       )}
       <ConfirmDialog
         open={!!deleting}

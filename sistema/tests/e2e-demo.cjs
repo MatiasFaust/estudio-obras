@@ -401,6 +401,30 @@ async function logout(page) {
   await page.click('[aria-label="Editar 3001"]');
   await page.waitForSelector('#mb-price', { timeout: 10000 });
   check((await page.$eval('#mb-client', (e) => e.value)) === 'Cliente Manual Prueba', 'manual: se abre para editar');
+  // Pagos del presupuesto sin obra ($ 85.000): se registran ahí mismo y mueven la barrita de la tabla
+  const manualPath = await page.evaluate(() => location.pathname);
+  check((await page.$eval('#pagos', (e) => e.textContent).catch(() => '')).includes('Honorarios'), 'presupuesto sin obra: muestra sus pagos');
+  await clickText(page, '#pagos button', 'Registrar pago');
+  await page.waitForSelector('#pay-concept', { timeout: 10000 });
+  await page.type('#pay-concept', 'Seña del manual');
+  await page.type('#pay-amount', '42.500');
+  await clickText(page, '[role=dialog] button[type=submit]', 'Guardar pago');
+  await sleep(1200);
+  const manualPaid = await page.$eval('#pagos', (e) => ({ txt: e.textContent, pct: e.querySelector('[role=progressbar]')?.getAttribute('aria-valuenow') }));
+  check(manualPaid.txt.includes('Seña del manual') && manualPaid.pct === '50', `presupuesto sin obra: pago registrado, 50 % cobrado (${manualPaid.pct})`);
+  await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
+  await page.keyboard.press('Escape');
+  await sleep(500);
+  const manualBar = await page.$eval('[aria-label^="Pagos de 3001"]', (a) => ({ href: a.getAttribute('href'), pct: a.querySelector('[role=progressbar]')?.getAttribute('aria-valuenow') })).catch(() => null);
+  check(manualBar?.pct === '50' && manualBar?.href === `${manualPath}#pagos`, `tabla: barrita del presupuesto sin obra al 50 % (${JSON.stringify(manualBar)})`);
+  await page.goto(`${BASE}${manualPath}`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('#mb-price', { timeout: 10000 });
+  await clickText(page, 'button', 'Eliminar');
+  await sleep(500);
+  check((await page.$eval('[role=alertdialog], [role=dialog]', (e) => e.textContent).catch(() => '')).includes('También se elimina su pago registrado'), 'al eliminar avisa que se borran sus pagos');
+  await page.keyboard.press('Escape');
+  await sleep(400);
   // La dirección vieja dentro de la obra lleva al editor nuevo
   await page.goto(`${BASE}/obras/p1/presupuestos/b1`, { waitUntil: 'networkidle2' });
   await page.waitForFunction(() => location.pathname === '/pagos/b1', { timeout: 10000 }).catch(() => {});

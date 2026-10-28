@@ -13,6 +13,9 @@ export const BUDGET_STATUS: Record<BudgetStatus, { label: string; className: str
 
 export const BUDGET_STATUS_OPTIONS = Object.entries(BUDGET_STATUS).map(([value, s]) => ({ value, label: s.label }));
 
+/** Estados en los que el presupuesto ya se está cobrando (con obra, su precio es el monto acordado) */
+export const BUDGET_PAYING: BudgetStatus[] = ["aceptado", "en_ejecucion", "finalizado"];
+
 export const BUDGET_KINDS: Record<BudgetKind, { label: string; short: string }> = {
   membretado: { label: "Con hoja membretada", short: "Membretado" },
   manual: { label: "Manual con costo fijo", short: "Manual" },

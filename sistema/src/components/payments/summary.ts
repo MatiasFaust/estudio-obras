@@ -1,4 +1,9 @@
-import type { Currency, Finance, Payment } from "@/lib/types";
+import type { Budget, Currency, Finance, Payment } from "@/lib/types";
+
+type Agreement = Pick<Finance, "agreed_amount" | "currency">;
+
+/** En un presupuesto sin obra, lo acordado son sus honorarios */
+export const budgetAgreement = (b: Pick<Budget, "price" | "currency">): Agreement => ({ agreed_amount: b.price, currency: b.currency });
 
 export interface PaymentSummary {
   currency: Currency;
@@ -11,8 +16,8 @@ export interface PaymentSummary {
   lastPaidOn: string | null;
 }
 
-/** Resumen del avance de pago de una obra (montos en la moneda acordada) */
-export function summarize(finance: Finance | undefined, payments: Payment[]): PaymentSummary {
+/** Resumen del avance de pago de una obra o presupuesto (montos en la moneda acordada) */
+export function summarize(finance: Agreement | undefined, payments: Payment[]): PaymentSummary {
   const currency = finance?.currency ?? payments[0]?.currency ?? "UYU";
   const paid = Math.round(payments.reduce((a, p) => a + p.amount_contract, 0) * 100) / 100;
   const agreed = finance?.agreed_amount ?? null;

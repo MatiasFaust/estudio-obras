@@ -15,8 +15,9 @@ import { StatusDot } from "@/components/common/status-badge";
 import { StatusDistribution, TypeBars } from "@/components/dashboard/charts";
 import { NoteDialog } from "@/components/notes/note-dialog";
 import { STATUS } from "@/lib/constants";
-import { summarize } from "@/components/payments/summary";
-import { useClients, useFinances, useNotes, usePayments, useProjects, useSession } from "@/lib/data/hooks";
+import { BUDGET_PAYING } from "@/components/budgets/budget-status";
+import { budgetAgreement, summarize } from "@/components/payments/summary";
+import { useBudgets, useClients, useFinances, useNotes, usePayments, useProjects, useSession } from "@/lib/data/hooks";
 import { formatDate, formatMoney, isOverdue } from "@/lib/format";
 import { can } from "@/lib/permissions";
 import type { Currency } from "@/lib/types";
@@ -41,13 +42,21 @@ function PendingPayments() {
   const projects = useProjects();
   const finances = useFinances(true);
   const payments = usePayments(true);
+  const budgets = useBudgets(true);
   if (!finances.data || !payments.data) return null;
 
   const totals = new Map<Currency, number>();
+  const add = (s: ReturnType<typeof summarize>) => {
+    if (s.balance && s.balance > 0) totals.set(s.currency, (totals.get(s.currency) ?? 0) + s.balance);
+  };
   for (const f of finances.data) {
     if (projects.data?.find((p) => p.id === f.project_id)?.status === "archivada") continue;
-    const s = summarize(f, payments.data.filter((p) => p.project_id === f.project_id));
-    if (s.balance && s.balance > 0) totals.set(s.currency, (totals.get(s.currency) ?? 0) + s.balance);
+    add(summarize(f, payments.data.filter((p) => p.project_id === f.project_id)));
+  }
+  // Presupuestos aceptados sin obra: sus honorarios menos lo cobrado
+  for (const b of budgets.data ?? []) {
+    if (b.project_id || !BUDGET_PAYING.includes(b.status)) continue;
+    add(summarize(budgetAgreement(b), payments.data.filter((p) => p.budget_id === b.id)));
   }
 
   return (

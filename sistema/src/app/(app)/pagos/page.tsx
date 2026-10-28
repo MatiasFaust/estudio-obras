@@ -16,11 +16,11 @@ import { PageHeader } from "@/components/common/page-header";
 import { ProgressBar } from "@/components/common/progress-bar";
 import { SimpleSelect } from "@/components/common/simple-select";
 import { downloadBudgetPdf } from "@/components/budgets/budget-pdf";
-import { BUDGET_KINDS, BUDGET_STATUS, BUDGET_STATUS_OPTIONS, BudgetStatusBadge } from "@/components/budgets/budget-status";
+import { BUDGET_KINDS, BUDGET_PAYING, BUDGET_STATUS, BUDGET_STATUS_OPTIONS, BudgetStatusBadge } from "@/components/budgets/budget-status";
 import { CalculatorDialog } from "@/components/budgets/calculator-dialog";
 import { money } from "@/components/budgets/budget-text";
 import { ManualBudgetForm } from "@/components/budgets/manual-budget-form";
-import { summarize } from "@/components/payments/summary";
+import { budgetAgreement, summarize } from "@/components/payments/summary";
 import { useAction, useBudgets, useBudgetSettings, useClients, useFinances, usePayments, useProjects, useRepo, useSession } from "@/lib/data/hooks";
 import { formatDate, matches } from "@/lib/format";
 import { can } from "@/lib/permissions";
@@ -30,8 +30,6 @@ const STATUS_FILTER = [{ value: "", label: "Todos los estados" }].concat(BUDGET_
 const KIND_FILTER = [{ value: "", label: "Todos los tipos" }].concat(
   Object.entries(BUDGET_KINDS).map(([value, k]) => ({ value, label: k.label })),
 );
-// Estados en los que el presupuesto ya se está cobrando (su precio es el monto acordado de la obra)
-const PAYING: BudgetStatus[] = ["aceptado", "en_ejecucion", "finalizado"];
 
 /** Presupuestos: lista de todos los presupuestos del estudio y creador */
 export default function BudgetsPage() {
@@ -78,9 +76,11 @@ export default function BudgetsPage() {
     }
   }
 
-  // Avance de pago: lo cobrado en la obra sobre el monto acordado (antes de aceptarlo, 0 %)
+  // Avance de pago. Con obra: lo cobrado en la obra sobre el monto acordado (antes de aceptarlo, 0 %).
+  // Sin obra: sus propios pagos sobre los honorarios.
   function paidPercent(b: Budget) {
-    if (!b.project_id || !PAYING.includes(b.status)) return 0;
+    if (!b.project_id) return summarize(budgetAgreement(b), (payments.data ?? []).filter((p) => p.budget_id === b.id)).percent ?? 0;
+    if (!BUDGET_PAYING.includes(b.status)) return 0;
     const finance = finances.data?.find((f) => f.project_id === b.project_id);
     const own = (payments.data ?? []).filter((p) => p.project_id === b.project_id);
     return summarize(finance, own).percent ?? 0;
@@ -252,21 +252,15 @@ export default function BudgetsPage() {
   );
 }
 
-/** Barrita de cuánto se cobró; lleva a la pestaña de pagos de la obra, donde se registran */
+/** Barrita de cuánto se cobró; lleva a donde se registran los pagos (la obra o el propio presupuesto) */
 function PaymentProgress({ budget: b, percent }: { budget: Budget; percent: number }) {
-  if (!b.project_id || b.status === "rechazado") {
-    return (
-      <span className="text-muted-foreground" title={b.project_id ? undefined : "Los pagos se registran en la obra: vinculá el presupuesto a una obra para ver el avance."}>
-        —
-      </span>
-    );
-  }
+  if (b.status === "rechazado") return <span className="text-muted-foreground">—</span>;
   return (
     <Link
-      href={`/obras/${b.project_id}?tab=pagos`}
+      href={b.project_id ? `/obras/${b.project_id}?tab=pagos` : `/pagos/${b.id}#pagos`}
       className="block w-36 rounded-sm outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring"
       aria-label={`Pagos de ${b.number || "presupuesto"}: ${percent}% cobrado`}
-      title="Ver y registrar los pagos de la obra"
+      title={b.project_id ? "Ver y registrar los pagos de la obra" : "Ver y registrar los pagos del presupuesto"}
     >
       <ProgressBar value={percent} />
     </Link>

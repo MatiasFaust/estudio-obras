@@ -287,7 +287,7 @@ function Pay(id: string, project_id: string, ageDays: number, amount: number, cu
   const d = new Date();
   d.setDate(d.getDate() + ageDays);
   return {
-    id, project_id, paid_on: d.toISOString().slice(0, 10), amount, currency, exchange_rate, amount_contract,
+    id, project_id, budget_id: null, paid_on: d.toISOString().slice(0, 10), amount, currency, exchange_rate, amount_contract,
     concept, method, receipt, notes: null, created_by: DEMO_USERS.admin, created_at: d.toISOString(), updated_at: d.toISOString(),
   };
 }

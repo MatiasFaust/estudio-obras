@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { EmptyState } from "@/components/common/empty-state";
 import { Field } from "@/components/common/field";
 import { SimpleSelect } from "@/components/common/simple-select";
+import { BudgetPayments, useDeleteBudgetText } from "@/components/budgets/budget-payments";
 import { downloadBudgetPdf, previewBudgetPdf, printBudgetPdf } from "@/components/budgets/budget-pdf";
 import { BUDGET_STATUS_OPTIONS } from "@/components/budgets/budget-status";
 import { fillIntro, IVA_LABEL, newBudgetFrom, trabajoFrom } from "@/components/budgets/budget-text";
@@ -39,6 +40,7 @@ function BudgetEditorPage() {
   const budgets = useBudgets(allowed);
   const settings = useBudgetSettings(allowed);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteText = useDeleteBudgetText(allowed && presupuesto !== "nuevo" ? presupuesto : undefined);
 
   if (!allowed) return <EmptyState icon={Lock} title="Sin permiso" description="Los presupuestos son solo para administradores." />;
   if (projects.isLoading || budgets.isLoading || settings.isLoading) return <p className="text-sm text-muted-foreground">Cargando…</p>;
@@ -70,11 +72,12 @@ function BudgetEditorPage() {
             />
           </CardContent>
         </Card>
+        <BudgetPayments budget={budget} project={projects.data?.find((p) => p.id === budget.project_id)} />
         <ConfirmDialog
           open={confirmDelete}
           onOpenChange={setConfirmDelete}
           title="¿Eliminar el presupuesto?"
-          description="Esta acción no se puede deshacer."
+          description={deleteText}
           onConfirm={async () => {
             const ok = await run(() => repo.deleteBudget(budget.id), "Presupuesto eliminado");
             if (ok) router.replace("/pagos");
@@ -139,6 +142,7 @@ function BudgetForm({
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busyPdf, setBusyPdf] = useState(false);
+  const deleteText = useDeleteBudgetText(budget?.id);
   const set = <K extends keyof BudgetInput>(k: K, v: BudgetInput[K]) => setB((x) => ({ ...x, [k]: v }));
   const project = projects.find((p) => p.id === b.project_id);
 
@@ -353,12 +357,14 @@ function BudgetForm({
         </div>
       </div>
 
+      {budget && <BudgetPayments budget={budget} project={projects.find((p) => p.id === budget.project_id)} />}
+
       {budget && (
         <ConfirmDialog
           open={confirmDelete}
           onOpenChange={setConfirmDelete}
           title="¿Eliminar el presupuesto?"
-          description="Esta acción no se puede deshacer."
+          description={deleteText}
           onConfirm={async () => {
             const ok = await run(() => repo.deleteBudget(budget.id), "Presupuesto eliminado");
             if (ok) router.replace("/pagos");

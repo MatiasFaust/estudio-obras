@@ -132,14 +132,16 @@ export interface Finance {
   updated_at: string;
 }
 
+/** Pago del cliente: de una obra o, si el presupuesto no tiene obra, del presupuesto */
 export interface Payment {
   id: string;
-  project_id: string;
+  project_id: string | null;
+  budget_id: string | null;
   paid_on: string;
   amount: number;
   currency: Currency;
   exchange_rate: number | null;
-  /** Monto en la moneda acordada de la obra */
+  /** Monto en la moneda acordada de la obra (o del presupuesto) */
   amount_contract: number;
   concept: string;
   method: PaymentMethod;
@@ -159,7 +161,8 @@ export interface FinanceInput {
 }
 
 export interface PaymentInput {
-  project_id: string;
+  project_id: string | null;
+  budget_id: string | null;
   paid_on: string;
   amount: number;
   currency: Currency;

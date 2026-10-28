@@ -72,14 +72,16 @@ export function FinanceDialog({ projectId, finance, onClose }: { projectId: stri
   );
 }
 
-/** Registrar o editar un pago del cliente */
+/** Registrar o editar un pago del cliente (de una obra o de un presupuesto sin obra) */
 export function PaymentDialog({
   projectId,
+  budgetId,
   contractCurrency,
   payment,
   onClose,
 }: {
-  projectId: string;
+  projectId?: string;
+  budgetId?: string;
   contractCurrency: Currency;
   payment?: Payment | null;
   onClose: () => void;
@@ -114,7 +116,8 @@ export function PaymentDialog({
       return;
     }
     const input = {
-      project_id: projectId,
+      project_id: projectId ?? null,
+      budget_id: budgetId ?? null,
       paid_on: v.paid_on,
       amount: parseMoney(v.amount)!,
       currency: v.currency,

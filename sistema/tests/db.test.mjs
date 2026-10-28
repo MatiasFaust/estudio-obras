@@ -197,6 +197,26 @@ await as(ADMIN, `update budgets set project_id = '${otherProj}', status = 'en_ej
 check((await db.query(`select agreed_amount::float as a from project_finances where project_id = '${otherProj}'`)).rows[0]?.a === 50000, 'vinculado a una obra y en ejecución → monto acordado');
 await as(ADMIN, `delete from projects where id = '${otherProj}'`);
 check((await db.query(`select project_id from budgets where id = '${manual.id}'`)).rows[0]?.project_id === null, 'si se borra la obra, el presupuesto queda (sin obra)');
+// Pagos de un presupuesto sin obra (2100, $ 50.000): se registran en el presupuesto, en su moneda
+await as(ADMIN, `insert into payments (budget_id, amount, currency, concept) values ('${manual.id}', 20000, 'UYU', 'Seña')`);
+await as(ADMIN, `insert into payments (budget_id, amount, currency, exchange_rate, concept) values ('${manual.id}', 100, 'USD', 40, 'En dólares')`);
+const budgetPaid = (await db.query(`select sum(amount_contract)::float as s from payments where budget_id = '${manual.id}'`)).rows[0].s;
+check(budgetPaid === 24000, `pagos de un presupuesto sin obra, en su moneda (${budgetPaid})`);
+check((await as(ADMIN, `select summary from activity_log where entity_type = 'payment' and summary like '%pago%presupuesto 2100 (Cliente suelto)%'`)).rows.length === 2, 'historial de los pagos del presupuesto');
+check(!!(await fails_(ADMIN, `insert into payments (project_id, budget_id, amount, currency, concept) values ('${budgetProj}', '${manual.id}', 1, 'UYU', 'Doble')`)), 'un pago no puede ser de una obra y de un presupuesto a la vez');
+check(!!(await fails_(ADMIN, `insert into payments (amount, currency, concept) values (1, 'UYU', 'Huérfano')`)), 'un pago tiene que ser de una obra o de un presupuesto');
+check(!!(await fails_(ARQ, `insert into payments (budget_id, amount, currency, concept) values ('${manual.id}', 1, 'UYU', 'x')`)), 'arquitecto NO registra pagos de presupuestos');
+check(!!(await fails_(ADMIN, `update budgets set currency = 'USD' where id = '${manual.id}'`)), 'cambiar la moneda del presupuesto exige cotización en sus pagos');
+// Al vincularlo a una obra, sus pagos pasan a la obra
+const linkProj = (await as(ADMIN, `insert into projects (name, address) values ('Obra vinculada después', 'Calle 10') returning id`)).rows[0].id;
+await as(ADMIN, `update budgets set project_id = '${linkProj}' where id = '${manual.id}'`);
+const moved = (await db.query(`select count(*)::int as n, sum(amount_contract)::float as s from payments where project_id = '${linkProj}' and budget_id is null`)).rows[0];
+check(moved.n === 2 && moved.s === 24000, `vinculado a una obra: sus pagos pasan a la obra (${moved.n} pagos, ${moved.s})`);
+// Si se borra un presupuesto sin obra, se borran sus pagos
+const loose = (await as(ADMIN, `insert into budgets (kind, number, price) values ('manual', '2101', 1000) returning id`)).rows[0].id;
+await as(ADMIN, `insert into payments (budget_id, amount, currency, concept) values ('${loose}', 500, 'UYU', 'Mitad')`);
+await as(ADMIN, `delete from budgets where id = '${loose}'`);
+check((await db.query(`select count(*)::int as n from payments where budget_id = '${loose}'`)).rows[0].n === 0, 'borrar un presupuesto sin obra borra sus pagos');
 check(!!(await fails_(ADMIN, `insert into budgets (project_id, includes) values ('${budgetProj}', '{"no":"lista"}')`)), 'lo que incluye tiene que ser una lista');
 check((await as(ARQ, `select id from budgets`)).rows.length === 0, 'arquitecto NO ve presupuestos');
 check(!!(await fails_(ARQ, `insert into budgets (project_id) values ('${budgetProj}')`)), 'arquitecto NO crea presupuestos');
