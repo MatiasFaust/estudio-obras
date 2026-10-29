@@ -48,6 +48,7 @@ Sistema de gestión para el estudio de arquitectura **RF** de Paysandú, Uruguay
 - Sin `.env.local`, la app corre en **modo demo** (datos ficticios en localStorage) con la misma interfaz `Repo` (`src/lib/data/`).
 - Colores (inspirados en el Instagram @rf.estudioarq): grises fríos con el gris azulado del logo RF en `src/app/globals.css`. En el estudio de desarrollo, `AppShell` pone `data-area="desarrollo"` en `<html>` y el color principal pasa al azul oscuro del logo [rf].
 - Supabase (plan gratis) **pausa el proyecto tras unos 7 días sin uso**: el sistema deja de andar y la dirección `…supabase.co` ni siquiera existe (no resuelve). Se reactiva en el panel del proyecto con "Resume project"; el 28-10-2026 el primer intento volvió a pausarse y hubo que repetirlo (tardó unos 15 minutos). Para evitarlo, desde el 28-10-2026 Vercel llama todos los días a `/api/mantener-activo` (cron en `sistema/vercel.json`, 12:00 de Uruguay), que hace una consulta mínima con la clave pública. El proxy deja pasar esa ruta sin sesión.
+- Supabase repite el evento `SIGNED_IN` cada vez que se vuelve a la pestaña o se restaura la ventana. `onAuthChange` (`src/lib/data/supabase-repo.ts`) solo avisa si cambió la persona; antes se vaciaba la caché y se perdía lo que se estaba escribiendo (arreglado el 28-10-2026).
 - Las fechas por defecto van en hora local (`date-fns format`), no con `toISOString()`: en Uruguay, después de las 21 horas, UTC ya es el día siguiente.
 
 ## Comprobaciones

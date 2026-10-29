@@ -68,8 +68,14 @@ export function createSupabaseRepo(): Repo {
       if (error) throw new RepoError(error.message);
     },
     onAuthChange(cb) {
-      const { data } = sb.auth.onAuthStateChange((event) => {
-        if (["SIGNED_IN", "SIGNED_OUT", "USER_UPDATED", "PASSWORD_RECOVERY"].includes(event)) cb();
+      // Al volver a la pestaña (o al restaurar la ventana), Supabase repite "SIGNED_IN" con la
+      // misma sesión. Solo se avisa si entró otra persona: si no, se borraban los datos en
+      // memoria y se perdía lo que se estaba escribiendo en un formulario.
+      let userId: string | undefined;
+      const { data } = sb.auth.onAuthStateChange((event, session) => {
+        const changed = session?.user.id !== userId;
+        userId = session?.user.id;
+        if (event === "SIGNED_IN" ? changed : ["SIGNED_OUT", "USER_UPDATED", "PASSWORD_RECOVERY"].includes(event)) cb();
       });
       return () => data.subscription.unsubscribe();
     },

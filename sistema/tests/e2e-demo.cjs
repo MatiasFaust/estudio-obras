@@ -357,6 +357,19 @@ async function logout(page) {
   check((await page.$eval('#bg-client', (e) => e.value)).length > 0, 'al elegir la obra se completa el cliente');
   await page.type('#bg-number', '2097');
   await page.type('#bg-price', '400.000');
+  // Cambiar de pestaña o minimizar y volver no borra lo que se está escribiendo
+  await page.evaluate(() => {
+    const show = (state) => {
+      Object.defineProperty(document, 'visibilityState', { value: state, configurable: true });
+      Object.defineProperty(document, 'hidden', { value: state === 'hidden', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
+    };
+    show('hidden');
+    show('visible');
+  });
+  await sleep(1500);
+  const kept = await page.evaluate(() => ['#bg-number', '#bg-price', '#bg-client'].map((s) => document.querySelector(s)?.value));
+  check(kept[0] === '2097' && kept[1] === '400.000' && !!kept[2], `al volver a la pestaña sigue lo escrito (${kept.join(' | ')})`);
   await page.click('[aria-label="Estado"]');
   await sleep(400);
   await clickText(page, '[role=option]', 'Aceptado');
