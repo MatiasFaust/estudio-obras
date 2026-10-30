@@ -292,13 +292,33 @@ async function logout(page) {
   await sleep(1200);
   const b1Pct = await page.$eval('#pagos [role=progressbar]', (e) => e.getAttribute('aria-valuenow')).catch(() => null);
   check(page.url().includes('/pagos/b1') && b1Pct === '70', `el pago queda en el presupuesto: 33.800 de 48.000 = ${b1Pct} %`);
+  // Historial de pagos: todos los cobros, quién pagó y cuánto (se entra desde Presupuestos)
+  await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
+  await page.keyboard.press('Escape');
+  await sleep(500);
+  await clickText(page, 'main a', 'Historial de pagos');
+  await page.waitForFunction(() => location.pathname === '/pagos/historial', { timeout: 10000 }).catch(() => {});
+  await page.waitForSelector('main tbody tr', { timeout: 10000 }).catch(() => {});
+  // Solo las filas visibles (Next deja la página anterior escondida)
+  const payHist = await page.$$eval('main tbody tr', (rows) => rows.filter((r) => r.checkVisibility()).map((r) => ({ txt: r.textContent, href: r.querySelector('a')?.getAttribute('href') })));
+  check(payHist.length >= 5 && payHist[0].txt.includes('Cuota 10 %') && payHist[0].txt.includes('2094') && payHist[0].txt.includes('Familia Ejemplo Acosta') && payHist[0].href === '/pagos/b1#pagos',
+    `historial de pagos: el último arriba, con presupuesto, cliente y enlace (${payHist.length} pagos)`);
+  await page.type('[aria-label="Buscar pagos"]', 'Certificado de avance 3');
+  await sleep(400);
+  const found = await page.$$eval('main tbody tr', (rows) => rows.filter((r) => r.checkVisibility()).map((r) => r.textContent.slice(0, 80)));
+  check(found.length === 1 && found[0].includes('Certificado de avance 3'), `historial de pagos: búsqueda por concepto (${found.join(' | ')})`);
 
   // --- Presupuestos en PDF
   // Atrapa la descarga del PDF y devuelve sus primeros bytes y su nombre
   const catchPdf = () => page.evaluate(() => new Promise((resolve) => {
     HTMLAnchorElement.prototype.click = function () {
       const name = this.download;
-      fetch(this.href).then((r) => r.arrayBuffer()).then((ab) => resolve({ name, head: String.fromCharCode(...new Uint8Array(ab).slice(0, 5)), size: ab.byteLength }));
+      fetch(this.href).then((r) => r.arrayBuffer()).then((ab) => resolve({
+        name, head: String.fromCharCode(...new Uint8Array(ab).slice(0, 5)), size: ab.byteLength,
+        // Cuántas imágenes lleva (el logo de arriba es una)
+        images: (new TextDecoder('latin1').decode(ab).match(/\/Subtype\s*\/Image/g) ?? []).length,
+      }));
     };
   }));
   await page.goto(`${BASE}/obras/p1?tab=presupuestos`, { waitUntil: 'networkidle2' });
@@ -321,6 +341,7 @@ async function logout(page) {
   await clickText(page, 'button', 'Descargar PDF');
   const pdfFile = await Promise.race([pdfPromise, sleep(15000).then(() => null)]);
   check(!!pdfFile && pdfFile.head === '%PDF-' && pdfFile.size > 5000 && pdfFile.name === '2095.PRES.pdf', `descarga el PDF "2095.PRES.pdf" (${pdfFile ? pdfFile.size + ' bytes' : 'no se generó'})`);
+  check(pdfFile?.images >= 1, `el PDF lleva el logo RF del estudio aunque no se haya subido ninguno (${pdfFile?.images} imágenes)`);
   await page.goto(`${BASE}/pagos/plantilla`, { waitUntil: 'networkidle2' });
   await page.waitForSelector('#tp-name', { timeout: 10000 });
   await page.$eval('#tp-name', (e) => { e.select?.(); });
@@ -343,7 +364,7 @@ async function logout(page) {
   const logoPdfPromise = catchPdf();
   await page.click('[aria-label="Descargar PDF de 2095"]');
   const logoPdf = await Promise.race([logoPdfPromise, sleep(15000).then(() => null)]);
-  check(!!logoPdf && logoPdf.head === '%PDF-' && !!pdfFile && logoPdf.size > pdfFile.size + 3000, `PDF con el logo principal (${pdfFile?.size} → ${logoPdf?.size} bytes)`);
+  check(!!logoPdf && logoPdf.head === '%PDF-' && logoPdf.images >= 1 && !!pdfFile && logoPdf.size !== pdfFile.size, `PDF con el logo subido en la plantilla en lugar del de siempre (${pdfFile?.size} → ${logoPdf?.size} bytes)`);
   // Guardar en Drive: se simula la carpeta de Google Drive para escritorio (cuadro "Elegir carpeta")
   const openList = async () => {
     await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });

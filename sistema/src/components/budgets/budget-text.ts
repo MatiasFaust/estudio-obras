@@ -4,6 +4,9 @@ import type { Budget, BudgetInput, BudgetKind, BudgetSettings, Currency, IvaMode
 
 // Textos del presupuesto que comparten el editor y el PDF.
 
+/** Logo RF del estudio para la hoja membretada (el que va si no se sube otro en la plantilla) */
+export const DEFAULT_LOGO = "/logos/rf-hoja.png";
+
 /** "$ 102.000" o "US$ 4.500,50" (sin decimales si es un número entero, como en los presupuestos del estudio) */
 export function money(amount: number, currency: Currency): string {
   const n = new Intl.NumberFormat("es-UY", {

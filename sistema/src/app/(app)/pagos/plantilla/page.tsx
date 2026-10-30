@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/common/empty-state";
 import { Field } from "@/components/common/field";
 import { PageHeader } from "@/components/common/page-header";
+import { DEFAULT_LOGO } from "@/components/budgets/budget-text";
 import { ImageInput, linesToText, numText, parseOptional, PaymentTermsEditor, textToLines } from "@/components/budgets/form-parts";
 import { useAction, useBudgetSettings, useRepo, useSession } from "@/lib/data/hooks";
 import { can } from "@/lib/permissions";
@@ -102,8 +103,14 @@ function TemplateForm({ initial }: { initial: BudgetSettings }) {
           <Field label="Dirección" htmlFor="tp-address">
             <Input id="tp-address" value={t.address} onChange={(e) => set("address", e.target.value)} />
           </Field>
-          <Field label="Logo principal" hint="Va arriba a la izquierda de la hoja. Sin logo, va el cuadrado negro con “RF.”.">
-            <ImageInput label="Logo principal" value={t.logo} onChange={(v) => set("logo", v)} />
+          <Field label="Logo principal" hint="Va arriba a la izquierda de la hoja. Si no subís ninguno, va el logo RF del estudio (el de la izquierda).">
+            <div className="flex flex-wrap items-center gap-3">
+              {!t.logo && (
+                // eslint-disable-next-line @next/next/no-img-element -- vista previa del logo que va por defecto
+                <img src={DEFAULT_LOGO} alt="Logo RF del estudio" className="size-16 rounded-md border" />
+              )}
+              <ImageInput label="Logo principal" value={t.logo} onChange={(v) => set("logo", v)} />
+            </div>
           </Field>
         </CardContent>
       </Card>

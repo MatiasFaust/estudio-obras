@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
-  ArrowLeft, Banknote, Calculator, ChevronDown, Copy, Download, FileText, HardDriveUpload, Lock, MoreHorizontal, NotebookPen, Pencil, Plus, Search, Settings2, Trash2,
+  ArrowLeft, Banknote, Calculator, ChevronDown, Copy, Download, FileText, HardDriveUpload, History, Lock, MoreHorizontal, NotebookPen, Pencil, Plus, Search, Settings2, Trash2,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -133,6 +133,7 @@ export default function BudgetsPage() {
           <>
             <Button variant="outline" onClick={() => setCalcOpen(true)}><Calculator /> Calculadora</Button>
             <Link href="/pagos/plantilla" className={buttonVariants({ variant: "outline" })}><Settings2 /> Plantilla</Link>
+            <Link href="/pagos/historial" className={buttonVariants({ variant: "outline" })}><History /> Historial de pagos</Link>
             <Button variant="outline" disabled={!paymentChoices.length} onClick={() => setPaying(Date.now())}><Banknote /> Registrar pago</Button>
             <Button onClick={() => setCreating("choose")}><Plus /> Presupuesto</Button>
           </>

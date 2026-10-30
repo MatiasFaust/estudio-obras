@@ -3,7 +3,7 @@
 import { Circle, Document, Font, Image as PdfImage, Page, Path, Rect, StyleSheet, Svg, Text, View, pdf } from "@react-pdf/renderer";
 import type { Style } from "@react-pdf/stylesheet";
 import type { Budget, BudgetSettings } from "@/lib/types";
-import { longDate, money, parseMarks, priceLine, termAmount } from "./budget-text";
+import { DEFAULT_LOGO, longDate, money, parseMarks, priceLine, termAmount } from "./budget-text";
 
 // PDF del presupuesto con el diseño de los presupuestos del estudio (A4, Poppins).
 // Se genera en el navegador: no pasa por ningún servicio externo.
@@ -34,9 +34,7 @@ const GRAY = "#555555";
 const s = StyleSheet.create({
   page: { fontFamily: "Poppins", fontSize: 11, color: INK, paddingTop: 36, paddingBottom: 96, paddingHorizontal: 36 },
   header: { flexDirection: "row", alignItems: "flex-end", marginBottom: 22 },
-  logo: { width: 48, height: 48, backgroundColor: INK, justifyContent: "center", alignItems: "center", marginRight: 8 },
-  logoText: { color: "#ffffff", fontSize: 24, fontWeight: 300, letterSpacing: -0.5 },
-  // Logo subido en la plantilla: misma altura que el cuadrado, el ancho según la imagen
+  // Logo: 48 de alto, el ancho según la imagen
   logoImage: { height: 48, maxWidth: 160, objectFit: "contain", marginRight: 8 },
   studio: { flexGrow: 1, justifyContent: "space-between", height: 48 },
   studioName: { fontSize: 11, fontWeight: 600, marginTop: -1 },
@@ -125,11 +123,8 @@ export function BudgetDocument({ budget: b, settings: t }: { budget: Budget; set
       <Page size="A4" style={s.page}>
         {/* Encabezado completo en la primera página; en las siguientes, solo la fecha */}
         <View style={s.header}>
-          {t.logo ? (
-            <PdfImage src={t.logo} style={s.logoImage} />
-          ) : (
-            <View style={s.logo}><Text style={s.logoText}>RF.</Text></View>
-          )}
+          {/* El logo subido en la plantilla o, si no hay, el logo RF del estudio */}
+          <PdfImage src={t.logo ?? `${window.location.origin}${DEFAULT_LOGO}`} style={s.logoImage} />
           <View style={s.studio}>
             <Text style={s.studioName}>{t.studio_name}</Text>
             <Text style={s.small}>{t.tagline}</Text>
