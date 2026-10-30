@@ -231,6 +231,7 @@ export function createSupabaseRepo(): Repo {
       return {
         ...t,
         logo: t.logo ?? null,
+        responsibles: t.responsibles ?? [],
         calc_types: t.calc_types ?? [],
         wage_value: num(t.wage_value ?? null),
         expenses_fixed: num(t.expenses_fixed ?? null),

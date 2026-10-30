@@ -348,8 +348,10 @@ export interface BudgetSettings {
   note: string;
   signers: BudgetSigner[];
   footer: { lines: string[]; partners: BudgetPartner[] };
-  /** Logo principal de la hoja membretada (data URL). Sin logo va el cuadrado con "RF." */
+  /** Logo principal de la hoja membretada (data URL). Sin logo va el logo RF del estudio */
   logo: string | null;
+  /** Personas que se ofrecen como responsables de los presupuestos */
+  responsibles: string[];
   // Calculadora
   calc_types: CalcType[];
   wage_value: number | null;

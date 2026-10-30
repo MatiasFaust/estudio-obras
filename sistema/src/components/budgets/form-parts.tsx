@@ -1,12 +1,12 @@
 "use client";
 
-import { ImagePlus, Plus, Trash2 } from "lucide-react";
+import { Check, ImagePlus, Plus, Trash2 } from "lucide-react";
 import { useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useProfiles } from "@/lib/data/hooks";
 import type { PaymentTerm } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { parseMoney } from "@/lib/validation";
 import { money, termAmount } from "./budget-text";
 import type { Currency } from "@/lib/types";
@@ -74,30 +74,42 @@ export function PaymentTermsEditor({
   );
 }
 
-/** Responsables del presupuesto: texto libre, con atajos para sumar a los integrantes del estudio */
-export function ResponsibleInput({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
-  const profiles = useProfiles();
-  const missing = (profiles.data ?? [])
-    .filter((p) => p.active && p.arquitectura && p.full_name.trim())
-    .map((p) => p.full_name.trim())
-    .filter((n) => !value.toLowerCase().includes(n.toLowerCase()));
+/** Nombres escritos en "Responsables" ("Ana, Juan y Pedro" → 3 nombres) */
+const responsibleNames = (text: string) => text.split(/\s*(?:,|\by\b)\s*/i).map((n) => n.trim()).filter(Boolean);
+const sameName = (a: string, b: string) => a.localeCompare(b, "es", { sensitivity: "base" }) === 0;
+
+/**
+ * Responsables del presupuesto: botones con las personas de la plantilla (se marcan y desmarcan)
+ * y un texto libre por si se encarga otra persona.
+ */
+export function ResponsibleInput({ id, value, onChange, options }: { id: string; value: string; onChange: (v: string) => void; options: string[] }) {
+  const names = responsibleNames(value);
+  const toggle = (person: string) =>
+    onChange((names.some((n) => sameName(n, person)) ? names.filter((n) => !sameName(n, person)) : [...names, person]).join(", "));
   return (
     <div className="grid gap-1.5">
-      <Input id={id} value={value} maxLength={160} onChange={(e) => onChange(e.target.value)} placeholder="Ej.: Roni y Jimena" />
-      {missing.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {missing.map((n) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => onChange(value.trim() ? `${value.trim()}, ${n}` : n)}
-              className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              + {n}
-            </button>
-          ))}
+      {options.length > 0 && (
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Elegir responsables">
+          {options.map((person) => {
+            const on = names.some((n) => sameName(n, person));
+            return (
+              <button
+                key={person}
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggle(person)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  on ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                {on ? <Check className="size-3" /> : <Plus className="size-3" />} {person}
+              </button>
+            );
+          })}
         </div>
       )}
+      <Input id={id} value={value} maxLength={160} onChange={(e) => onChange(e.target.value)} placeholder="Elegí arriba o escribí el nombre" />
     </div>
   );
 }

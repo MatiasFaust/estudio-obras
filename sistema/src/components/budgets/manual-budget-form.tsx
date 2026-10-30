@@ -125,7 +125,7 @@ export function ManualBudgetForm({
         </Field>
       </div>
       <Field label="Responsables" htmlFor="mb-responsible" optional>
-        <ResponsibleInput id="mb-responsible" value={b.responsible} onChange={(v) => set("responsible", v)} />
+        <ResponsibleInput id="mb-responsible" value={b.responsible} onChange={(v) => set("responsible", v)} options={settings.responsibles} />
       </Field>
       <Field label="Forma de pago" optional hint="Las cuotas se pueden elegir al registrar un pago.">
         <PaymentTermsEditor

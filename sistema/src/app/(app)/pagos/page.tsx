@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
-  ArrowLeft, Banknote, Calculator, ChevronDown, Copy, Download, FileText, HardDriveUpload, History, Lock, MoreHorizontal, NotebookPen, Pencil, Plus, Search, Settings2, Trash2,
+  ArrowLeft, Banknote, Calculator, ChevronDown, Copy, Download, FileText, FileUp, HardDriveUpload, History, Lock, MoreHorizontal, NotebookPen, Pencil, Plus, Search, Settings2, Trash2,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -24,6 +24,7 @@ import { useSaveToDrive } from "@/components/budgets/drive-save";
 import { BUDGET_KINDS, BUDGET_STATUS, BUDGET_STATUS_OPTIONS, BudgetStatusBadge } from "@/components/budgets/budget-status";
 import { CalculatorDialog } from "@/components/budgets/calculator-dialog";
 import { budgetCopy, money } from "@/components/budgets/budget-text";
+import { ImportBudgetsDialog } from "@/components/budgets/import-budgets-dialog";
 import { ManualBudgetForm } from "@/components/budgets/manual-budget-form";
 import { budgetPaymentTarget, PaymentDialog, type PaymentChoice } from "@/components/payments/payment-dialogs";
 import { budgetPayments } from "@/components/payments/summary";
@@ -60,6 +61,7 @@ export default function BudgetsPage() {
   const [paying, setPaying] = useState<number | null>(null);
   // La calculadora se abre sola al entrar a Presupuestos
   const [calcOpen, setCalcOpen] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [deleting, setDeleting] = useState<Budget | null>(null);
   const deleteText = useDeleteBudgetText(deleting?.id);
   const drive = useSaveToDrive();
@@ -251,6 +253,7 @@ export default function BudgetsPage() {
 
       {paying && <PaymentDialog key={paying} choices={paymentChoices} onClose={() => setPaying(null)} />}
       {drive.dialog}
+      <ImportBudgetsDialog open={importing} onOpenChange={setImporting} existing={all} />
 
       <ConfirmDialog
         open={!!deleting}
@@ -310,6 +313,15 @@ export default function BudgetsPage() {
                   title="Presupuesto manual con costo fijo"
                   description="Cliente, servicio y honorarios ya acordados. Queda registrado en la tabla, sin PDF."
                   onClick={() => setCreating("manual")}
+                />
+                <ChoiceButton
+                  icon={FileUp}
+                  title="Subir presupuestos en PDF"
+                  description="Los que ya tenés en la compu: elegí muchos juntos, el sistema los lee y los carga."
+                  onClick={() => {
+                    setCreating(null);
+                    setImporting(true);
+                  }}
                 />
               </div>
             </>

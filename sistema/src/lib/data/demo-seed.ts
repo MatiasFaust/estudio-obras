@@ -326,6 +326,7 @@ export function createBudgetDemoData(): Pick<DemoDB, "budgets" | "budgetSettings
       partners: [{ name: "Paisajismo Demo", lines: ["@paisajismo.demo", "paisajismo@demo.local"], logo: null }],
     },
     logo: null,
+    responsibles: ["Laura Méndez", "Diego Suárez"],
     calc_types: [
       { name: "Obra nueva", fee_per_m2: 1500, wages_per_m2: 6, build_cost_per_m2: 45000 },
       { name: "Reforma", fee_per_m2: 1200, wages_per_m2: 1.5, build_cost_per_m2: 25000 },

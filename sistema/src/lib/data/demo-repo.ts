@@ -63,8 +63,9 @@ function load(): DemoDB {
         localStorage.setItem(DB_KEY, JSON.stringify(db));
       }
       // ...y antes de los responsables y el logo principal
-      if (db.budgetSettings.logo === undefined || db.budgets.some((b) => b.responsible === undefined)) {
+      if (db.budgetSettings.logo === undefined || !db.budgetSettings.responsibles || db.budgets.some((b) => b.responsible === undefined)) {
         db.budgetSettings.logo ??= null;
+        db.budgetSettings.responsibles ??= createBudgetDemoData().budgetSettings.responsibles;
         for (const b of db.budgets) b.responsible ??= "";
         localStorage.setItem(DB_KEY, JSON.stringify(db));
       }

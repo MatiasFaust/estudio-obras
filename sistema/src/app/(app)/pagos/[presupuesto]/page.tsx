@@ -289,7 +289,7 @@ function BudgetForm({
             <SimpleSelect value={b.status} onChange={(v) => set("status", v as Budget["status"])} options={BUDGET_STATUS_OPTIONS} aria-label="Estado" />
           </Field>
           <Field label="Responsables" htmlFor="bg-responsible" optional className="sm:col-span-3">
-            <ResponsibleInput id="bg-responsible" value={b.responsible} onChange={(v) => set("responsible", v)} />
+            <ResponsibleInput id="bg-responsible" value={b.responsible} onChange={(v) => set("responsible", v)} options={settings.responsibles} />
           </Field>
         </CardContent>
       </Card>

@@ -34,6 +34,7 @@ function TemplateForm({ initial }: { initial: BudgetSettings }) {
   const [t, setT] = useState(initial);
   const [includes, setIncludes] = useState(linesToText(initial.includes));
   const [footerLines, setFooterLines] = useState(linesToText(initial.footer.lines));
+  const [responsibles, setResponsibles] = useState(linesToText(initial.responsibles));
   const [partners, setPartners] = useState(initial.footer.partners.map((p) => ({ ...p, text: linesToText(p.lines) })));
   const set = <K extends keyof BudgetSettings>(k: K, v: BudgetSettings[K]) => setT((x) => ({ ...x, [k]: v }));
   const setSigner = (i: number, patch: Partial<BudgetSigner>) => set("signers", t.signers.map((s, j) => (j === i ? { ...s, ...patch } : s)));
@@ -71,6 +72,7 @@ function TemplateForm({ initial }: { initial: BudgetSettings }) {
       ...values,
       iva_rate: iva,
       includes: textToLines(includes),
+      responsibles: textToLines(responsibles),
       payment_terms: t.payment_terms.filter((x) => x.label.trim() || x.percent),
       footer: {
         lines: textToLines(footerLines),
@@ -111,6 +113,15 @@ function TemplateForm({ initial }: { initial: BudgetSettings }) {
               )}
               <ImageInput label="Logo principal" value={t.logo} onChange={(v) => set("logo", v)} />
             </div>
+          </Field>
+        </CardContent>
+      </Card>
+
+      <Card size="sm">
+        <CardHeader><CardTitle>Responsables</CardTitle></CardHeader>
+        <CardContent>
+          <Field label="Personas del estudio" htmlFor="tp-responsibles" hint="Una por línea. En cada presupuesto aparecen como botones para elegir quién se encarga.">
+            <Textarea id="tp-responsibles" rows={3} value={responsibles} onChange={(e) => setResponsibles(e.target.value)} placeholder={"Ej.:\nNombre Apellido"} />
           </Field>
         </CardContent>
       </Card>

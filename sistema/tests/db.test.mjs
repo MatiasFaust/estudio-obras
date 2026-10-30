@@ -226,6 +226,10 @@ check((await as(ADMIN, `select studio_name from budget_settings`)).rows[0].studi
 check(!!(await fails_(ADMIN, `insert into budget_settings (id) values (false)`)), 'la plantilla es una sola');
 await as(ADMIN, `update budget_settings set logo = 'data:image/png;base64,AAAA'`);
 check((await as(ADMIN, `select logo from budget_settings`)).rows[0].logo.startsWith('data:image/png'), 'plantilla: guarda el logo principal');
+check((await as(ADMIN, `select responsibles from budget_settings`)).rows[0].responsibles.length === 0, 'plantilla: sin opciones de responsables al principio');
+await as(ADMIN, `update budget_settings set responsibles = '["Persona Uno","Persona Dos"]'`);
+check((await as(ADMIN, `select responsibles from budget_settings`)).rows[0].responsibles[1] === 'Persona Dos', 'plantilla: guarda las opciones de responsables');
+check(!!(await fails_(ADMIN, `update budget_settings set responsibles = '"no es lista"'`)), 'plantilla: las opciones de responsables tienen que ser una lista');
 await as(ADMIN, `update budgets set responsible = 'Roni y Jimena' where id = '${budget.id}'`);
 check((await as(ADMIN, `select responsible from budgets where id = '${budget.id}'`)).rows[0].responsible === 'Roni y Jimena', 'presupuesto: guarda los responsables');
 check((await as(ADMIN, `select responsible from budgets where number = '2096'`)).rows[0].responsible === '', 'presupuesto: sin responsables queda vacío');

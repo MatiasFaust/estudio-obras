@@ -355,6 +355,7 @@ async function logout(page) {
   await page.goto(`${BASE}/pagos/plantilla`, { waitUntil: 'networkidle2' });
   await page.waitForSelector('#tp-name', { timeout: 10000 });
   check((await page.$eval('#tp-name', (e) => e.value)) === 'Estudio Prueba', 'plantilla: se guarda y se vuelve a cargar');
+  check((await page.$eval('#tp-responsibles', (e) => e.value.split('\n'))).join('|') === 'Laura Méndez|Diego Suárez', 'plantilla: lista de responsables, uno por línea');
   check(!!(await page.$('img[alt="Logo principal"]')), 'plantilla: se guarda el logo principal');
   // El PDF lleva el logo nuevo (la imagen lo hace más pesado)
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
@@ -508,7 +509,17 @@ async function logout(page) {
   await page.type('#mb-service', 'Regularización');
   await page.type('#mb-price', '85.000');
   await page.type('#mb-number', '3001');
+  // Responsables: botones con las personas de la plantilla (se marcan y desmarcan) y texto libre
+  const respChips = await texts(page, '[aria-label="Elegir responsables"] button');
+  check(respChips.includes('Laura Méndez') && respChips.includes('Diego Suárez'), `responsables: botones con las personas de la plantilla (${respChips.join(' | ')})`);
   await page.type('#mb-responsible', 'Roni');
+  await clickText(page, '[aria-label="Elegir responsables"] button', 'Diego Suárez');
+  await sleep(200);
+  const respOn = await page.$eval('#mb-responsible', (e) => e.value);
+  await clickText(page, '[aria-label="Elegir responsables"] button', 'Diego Suárez');
+  await sleep(200);
+  const respOff = await page.$eval('#mb-responsible', (e) => e.value);
+  check(respOn === 'Roni, Diego Suárez' && respOff === 'Roni', `responsables: un toque agrega y otro saca (${respOn} → ${respOff})`);
   await clickText(page, '[role=dialog] button[type=submit]', 'Guardar presupuesto');
   await sleep(1200);
   check(!(await page.$('#mb-client')), 'manual: al guardar se cierra la ventana');
@@ -598,6 +609,40 @@ async function logout(page) {
   await sleep(1000);
   const rowsAfter = await page.$$eval('main tbody tr', (rows) => rows.map((r) => r.textContent));
   check(rowsAfter.length === rowsBefore && rowsAfter.some((t) => t.includes('3001')), 'eliminar desde la tabla: se borra la copia y queda el original');
+  // Subir presupuestos en PDF (uno hecho en Word y uno del sistema, con datos inventados)
+  const openImport = async (...files) => {
+    await openList();
+    await clickText(page, 'main button', 'Presupuesto');
+    await sleep(500);
+    await clickText(page, '[role=dialog] button', 'Subir presupuestos en PDF');
+    await sleep(500);
+    await (await page.$('input[type=file][aria-label="PDF de presupuestos"]')).uploadFile(...files.map((f) => path.join(__dirname, 'fixtures', f)));
+    await page.waitForFunction((n) => document.querySelectorAll('[role=dialog] tbody tr').length === n, { timeout: 20000 }, files.length).catch(() => {});
+    return page.$$eval('[role=dialog] tbody tr', (rows) => rows.map((r) => r.textContent));
+  };
+  const imported = await openImport('3050 Ana Prueba.pdf', '3051.PRES.pdf');
+  check(imported.length === 2 && imported.some((t) => t.includes('3050') && t.includes('Ana Prueba') && t.includes('$ 48.000') && t.includes('Leído completo'))
+    && imported.some((t) => t.includes('3051') && t.includes('Familia Ficticia Gómez') && t.includes('US$ 4.500')), `subir PDF: lee los dos presupuestos (${imported.join(' | ')})`);
+  await clickText(page, '[role=dialog] button', 'Crear 2 presupuestos');
+  await page.waitForFunction(() => !document.querySelector('[role=dialog]'), { timeout: 15000 }).catch(() => {});
+  await sleep(800);
+  const afterImport = await page.$$eval('main tbody tr', (rows) => rows.filter((r) => r.checkVisibility()).map((r) => r.textContent));
+  check(afterImport.some((t) => t.includes('3050') && t.includes('Ana Prueba') && t.includes('Enviado')) && afterImport.some((t) => t.includes('3051') && t.includes('US$ 4.500')),
+    'subir PDF: quedan cargados en la tabla, como enviados');
+  await page.click('[aria-label="Editar 3050"]');
+  await page.waitForSelector('#bg-intro', { timeout: 10000 });
+  await sleep(500);
+  const imp = await page.evaluate(() => ({
+    padron: document.querySelector('#bg-padron').value, intro: document.querySelector('#bg-intro').value,
+    includes: document.querySelector('#bg-includes').value, terms: [...document.querySelectorAll('[aria-label^="Cuándo se paga la cuota"]')].map((e) => e.value),
+  }));
+  check(imp.padron === '1234' && imp.intro.includes('regularización de vivienda') && imp.includes.includes('planilla de áreas') && imp.terms.join('|') === 'al comenzar los trabajos|al aprobar el permiso',
+    `subir PDF: se abre como cualquier presupuesto, con texto, cuotas y lo que incluye (${imp.padron} | ${imp.terms.join(', ')})`);
+  const again = await openImport('3050 Ana Prueba.pdf');
+  const createBtn = await page.$$eval('[role=dialog] button', (bs) => bs.find((b) => b.textContent.includes('Crear'))?.disabled);
+  check(again.length === 1 && again[0].includes('Ya está cargado') && createBtn === true, 'subir PDF: avisa si ya está cargado y no lo repite');
+  await page.keyboard.press('Escape');
+  await sleep(400);
   // La dirección vieja dentro de la obra lleva al editor nuevo
   await page.goto(`${BASE}/obras/p1/presupuestos/b1`, { waitUntil: 'networkidle2' });
   await page.waitForFunction(() => location.pathname === '/pagos/b1', { timeout: 10000 }).catch(() => {});
