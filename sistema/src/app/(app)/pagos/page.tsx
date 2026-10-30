@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
-  ArrowLeft, Banknote, Calculator, ChevronDown, Copy, Download, FileText, Lock, MoreHorizontal, NotebookPen, Pencil, Plus, Search, Settings2, Trash2,
+  ArrowLeft, Banknote, Calculator, ChevronDown, Copy, Download, FileText, HardDriveUpload, Lock, MoreHorizontal, NotebookPen, Pencil, Plus, Search, Settings2, Trash2,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -19,7 +19,8 @@ import { PageHeader } from "@/components/common/page-header";
 import { ProgressBar } from "@/components/common/progress-bar";
 import { SimpleSelect } from "@/components/common/simple-select";
 import { useDeleteBudgetText } from "@/components/budgets/budget-payments";
-import { downloadBudgetPdf } from "@/components/budgets/budget-pdf";
+import { budgetFileName, budgetPdfBlob, downloadBudgetPdf } from "@/components/budgets/budget-pdf";
+import { useSaveToDrive } from "@/components/budgets/drive-save";
 import { BUDGET_KINDS, BUDGET_STATUS, BUDGET_STATUS_OPTIONS, BudgetStatusBadge } from "@/components/budgets/budget-status";
 import { CalculatorDialog } from "@/components/budgets/calculator-dialog";
 import { budgetCopy, money } from "@/components/budgets/budget-text";
@@ -61,6 +62,7 @@ export default function BudgetsPage() {
   const [calcOpen, setCalcOpen] = useState(true);
   const [deleting, setDeleting] = useState<Budget | null>(null);
   const deleteText = useDeleteBudgetText(deleting?.id);
+  const drive = useSaveToDrive();
 
   const projectById = useMemo(() => new Map((projects.data ?? []).map((p) => [p.id, p])), [projects.data]);
 
@@ -83,6 +85,11 @@ export default function BudgetsPage() {
     } finally {
       setBusy(null);
     }
+  }
+
+  async function saveToDrive(b: Budget) {
+    const t = settings.data;
+    if (t) await drive.save(budgetFileName(b), () => budgetPdfBlob(b, t));
   }
 
   // Avance de pago (ver budgetPayments): con obra, lo cobrado en la obra; sin obra, sus propios pagos
@@ -224,6 +231,9 @@ export default function BudgetsPage() {
                           }
                         />
                         <DropdownMenuContent align="end" className="w-40">
+                          {b.kind === "membretado" && drive.supported && (
+                            <DropdownMenuItem disabled={!settings.data} onClick={() => saveToDrive(b)}><HardDriveUpload /> Guardar en Drive</DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={() => duplicate(b)}><Copy /> Duplicar</DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem variant="destructive" onClick={() => setDeleting(b)}><Trash2 /> Eliminar</DropdownMenuItem>
@@ -239,6 +249,7 @@ export default function BudgetsPage() {
       )}
 
       {paying && <PaymentDialog key={paying} choices={paymentChoices} onClose={() => setPaying(null)} />}
+      {drive.dialog}
 
       <ConfirmDialog
         open={!!deleting}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { ArrowLeft, Download, Eye, FileText, Lock, Printer, Settings2, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, Eye, FileText, HardDriveUpload, Lock, Printer, Settings2, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,8 @@ import { EmptyState } from "@/components/common/empty-state";
 import { Field } from "@/components/common/field";
 import { SimpleSelect } from "@/components/common/simple-select";
 import { BudgetPayments, useDeleteBudgetText } from "@/components/budgets/budget-payments";
-import { downloadBudgetPdf, previewBudgetPdf, printBudgetPdf } from "@/components/budgets/budget-pdf";
+import { budgetFileName, budgetPdfBlob, downloadBudgetPdf, previewBudgetPdf, printBudgetPdf } from "@/components/budgets/budget-pdf";
+import { useSaveToDrive } from "@/components/budgets/drive-save";
 import { BUDGET_STATUS_OPTIONS } from "@/components/budgets/budget-status";
 import { fillIntro, IVA_LABEL, newBudgetFrom, trabajoFrom } from "@/components/budgets/budget-text";
 import { readPrefill, type CalcPrefill } from "@/components/budgets/calculator";
@@ -142,6 +143,7 @@ function BudgetForm({
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busyPdf, setBusyPdf] = useState(false);
+  const drive = useSaveToDrive();
   const deleteText = useDeleteBudgetText(budget?.id);
   const set = <K extends keyof BudgetInput>(k: K, v: BudgetInput[K]) => setB((x) => ({ ...x, [k]: v }));
   const project = projects.find((p) => p.id === b.project_id);
@@ -185,7 +187,7 @@ function BudgetForm({
   }
 
   /** Para el PDF se usa lo que está en pantalla, aunque no se haya guardado */
-  async function pdf(kind: "preview" | "download" | "print") {
+  async function pdf(kind: "preview" | "download" | "print" | "drive") {
     const input = current();
     if (!input) return;
     const doc: Budget = { ...(budget ?? { id: "nuevo", created_by: null, created_at: "", updated_at: "" }), ...input };
@@ -195,6 +197,7 @@ function BudgetForm({
     try {
       if (kind === "preview") await previewBudgetPdf(doc, settings, win);
       else if (kind === "print") await printBudgetPdf(doc, settings);
+      else if (kind === "drive") await drive.save(budgetFileName(doc), () => budgetPdfBlob(doc, settings));
       else await downloadBudgetPdf(doc, settings);
     } catch {
       win?.close();
@@ -218,9 +221,19 @@ function BudgetForm({
           <Button variant="outline" disabled={busyPdf} onClick={() => pdf("preview")}><Eye /> Vista previa</Button>
           <Button variant="outline" disabled={busyPdf} onClick={() => pdf("print")}><Printer /> Imprimir</Button>
           <Button variant="outline" disabled={busyPdf} onClick={() => pdf("download")}><Download /> Descargar PDF</Button>
+          {drive.supported && (
+            <Button variant="outline" disabled={busyPdf || drive.busy} onClick={() => pdf("drive")}><HardDriveUpload /> Guardar en Drive</Button>
+          )}
           <Button disabled={pending} onClick={() => save()}>{pending ? "Guardando…" : "Guardar"}</Button>
         </div>
       </div>
+      {drive.supported && drive.folderName && (
+        <p className="-mt-2 text-xs text-muted-foreground">
+          “Guardar en Drive” guarda el PDF en la carpeta <b className="font-medium">{drive.folderName}</b>.{" "}
+          <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => drive.change()}>Cambiar carpeta</button>
+        </p>
+      )}
+      {drive.dialog}
       {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
 
       <Card size="sm">

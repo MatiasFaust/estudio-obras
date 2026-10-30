@@ -21,7 +21,14 @@ async function clickText(page, selector, text) {
   }
   throw new Error(`No encontré ${selector} con "${text}"`);
 }
-const texts = (page, sel) => page.$$eval(sel, (els) => els.map((e) => e.textContent.trim()));
+/** Como clickText, pero el texto tiene que ser exacto ("Guardar" y no "Guardar en Drive") */
+async function clickExact(page, selector, text) {
+  for (const h of await page.$$(selector)) {
+    if ((await h.evaluate((e) => e.textContent.trim())) === text) { await h.click(); return true; }
+  }
+  throw new Error(`No encontré ${selector} con el texto exacto "${text}"`);
+}
+const texts = (page, sel) =>page.$$eval(sel, (els) => els.map((e) => e.textContent.trim()));
 
 async function login(page, name) {
   await page.goto(`${BASE}/login`, { waitUntil: 'networkidle2' });
@@ -305,7 +312,7 @@ async function logout(page) {
   await page.type('#bg-price', '102.000');
   await sleep(300);
   check((await page.$eval('main', (e) => e.textContent)).includes('$ 35.700'), 'forma de pago: calcula el 35% de $ 102.000');
-  await clickText(page, 'button', 'Guardar');
+  await clickExact(page, 'button', 'Guardar');
   await page.waitForFunction(() => /^\/pagos\/[^/]+$/.test(location.pathname) && !location.pathname.endsWith('/nuevo'), { timeout: 10000 }).catch(() => {});
   check(await page.evaluate(() => /^\/pagos\/[^/]+$/.test(location.pathname) && !location.pathname.endsWith('/nuevo')), 'presupuesto guardado (se edita dentro de Presupuestos)');
   check((await page.$eval('main', (e) => e.textContent)).includes('Vivienda Acosta'), 'el presupuesto nuevo desde la obra queda vinculado a esa obra');
@@ -337,6 +344,52 @@ async function logout(page) {
   await page.click('[aria-label="Descargar PDF de 2095"]');
   const logoPdf = await Promise.race([logoPdfPromise, sleep(15000).then(() => null)]);
   check(!!logoPdf && logoPdf.head === '%PDF-' && !!pdfFile && logoPdf.size > pdfFile.size + 3000, `PDF con el logo principal (${pdfFile?.size} → ${logoPdf?.size} bytes)`);
+  // Guardar en Drive: se simula la carpeta de Google Drive para escritorio (cuadro "Elegir carpeta")
+  const openList = async () => {
+    await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
+    await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
+    await page.keyboard.press('Escape');
+    await sleep(500);
+  };
+  await page.evaluateOnNewDocument(() => {
+    window.__saved = [];
+    window.__picks = 0;
+    const dir = {
+      kind: 'directory', name: 'Presupuestos',
+      queryPermission: async () => 'granted', requestPermission: async () => 'granted',
+      getFileHandle: async (name) => ({
+        createWritable: async () => {
+          const parts = [];
+          return {
+            write: async (b) => { parts.push(b); },
+            close: async () => {
+              const blob = new Blob(parts);
+              const head = new TextDecoder().decode((await blob.arrayBuffer()).slice(0, 5));
+              window.__saved.push({ name, size: blob.size, head });
+            },
+          };
+        },
+      }),
+    };
+    window.showDirectoryPicker = async () => { window.__picks++; return dir; };
+  });
+  await openList();
+  await page.click('[aria-label="Más opciones de 2095"]');
+  await sleep(400);
+  await clickText(page, '[role=menuitem]', 'Guardar en Drive');
+  await sleep(500);
+  check((await page.$eval('[role=dialog]', (e) => e.textContent).catch(() => '')).includes('Google Drive'), 'guardar en Drive: la primera vez explica cómo elegir la carpeta');
+  await clickText(page, '[role=dialog] button', 'Elegir carpeta');
+  await page.waitForFunction(() => window.__saved.length > 0, { timeout: 15000 }).catch(() => {});
+  const saved1 = await page.evaluate(() => window.__saved[0]);
+  check(saved1?.name === '2095.PRES.pdf' && saved1?.head === '%PDF-' && saved1?.size > 5000, `guardar en Drive: guarda el PDF en la carpeta (${JSON.stringify(saved1)})`);
+  await sleep(500);
+  await page.click('[aria-label="Más opciones de 2094"]');
+  await sleep(400);
+  await clickText(page, '[role=menuitem]', 'Guardar en Drive');
+  await page.waitForFunction(() => window.__saved.length > 1, { timeout: 15000 }).catch(() => {});
+  const drive2 = await page.evaluate(() => ({ saved: window.__saved[1], picks: window.__picks }));
+  check(drive2.saved?.name === '2094.PRES.pdf' && drive2.picks === 1, `guardar en Drive: la segunda vez guarda directo, sin volver a preguntar (${JSON.stringify(drive2)})`);
   // Nuevo presupuesto desde el menú, eligiendo la obra; al aceptarlo pasa a ser el monto acordado
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
   await sleep(800);
@@ -408,7 +461,7 @@ async function logout(page) {
   await sleep(400);
   await clickText(page, '[role=option]', 'Aceptado');
   await sleep(300);
-  await clickText(page, 'button', 'Guardar');
+  await clickExact(page, 'button', 'Guardar');
   await sleep(1500);
   await page.goto(`${BASE}/obras/p3?tab=pagos`, { waitUntil: 'networkidle2' });
   await sleep(1200);
@@ -494,12 +547,6 @@ async function logout(page) {
   await page.keyboard.press('Escape');
   await sleep(400);
   // Duplicar y eliminar desde la tabla
-  const openList = async () => {
-    await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
-    await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
-    await page.keyboard.press('Escape');
-    await sleep(500);
-  };
   await openList();
   const rowsBefore = (await page.$$('main tbody tr')).length;
   await page.click('[aria-label="Más opciones de 3001"]');
