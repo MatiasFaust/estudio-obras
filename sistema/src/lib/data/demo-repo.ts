@@ -62,6 +62,12 @@ function load(): DemoDB {
         Object.assign(db.budgetSettings, { calc_types, wage_value, expenses_fixed, expenses_per_m2, iva_rate });
         localStorage.setItem(DB_KEY, JSON.stringify(db));
       }
+      // ...y antes de los responsables y el logo principal
+      if (db.budgetSettings.logo === undefined || db.budgets.some((b) => b.responsible === undefined)) {
+        db.budgetSettings.logo ??= null;
+        for (const b of db.budgets) b.responsible ??= "";
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+      }
       return db;
     }
   } catch {
@@ -176,7 +182,7 @@ function moveBudgetPayments(db: DemoDB, before: Budget, b: Budget) {
 /** Mismas validaciones que la base */
 function checkBudget(b: Partial<Budget>) {
   const neg = (n: number | null | undefined) => n !== null && n !== undefined && n < 0;
-  if (neg(b.price) || neg(b.expenses_amount) || neg(b.wages_amount) || neg(b.wages_days)) {
+  if (neg(b.price) || neg(b.expenses_amount) || neg(b.wages_amount) || neg(b.wages_days) || (b.responsible?.length ?? 0) > 160) {
     throw new RepoError("Algún dato no cumple las validaciones.");
   }
 }

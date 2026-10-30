@@ -32,6 +32,7 @@ const num = (v: number | string | null) => (v === null ? null : Number(v));
 function budgetFromDb(b: Budget): Budget {
   return {
     ...b,
+    responsible: b.responsible ?? "",
     price: num(b.price),
     expenses_amount: num(b.expenses_amount),
     wages_days: num(b.wages_days),
@@ -229,6 +230,7 @@ export function createSupabaseRepo(): Repo {
       // Antes de la migración de la calculadora estas columnas no existen
       return {
         ...t,
+        logo: t.logo ?? null,
         calc_types: t.calc_types ?? [],
         wage_value: num(t.wage_value ?? null),
         expenses_fixed: num(t.expenses_fixed ?? null),

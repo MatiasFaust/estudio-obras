@@ -13,8 +13,8 @@ import { useAction, useFinances, usePayments, useRepo } from "@/lib/data/hooks";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { Budget, Payment, Project } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { FinanceDialog, PaymentDialog } from "./payment-dialogs";
-import { budgetAgreement, summarize } from "./summary";
+import { budgetPaymentTarget, FinanceDialog, PaymentDialog } from "./payment-dialogs";
+import { budgetPayments, summarize } from "./summary";
 
 function Figure({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
@@ -25,8 +25,11 @@ function Figure({ label, value, tone }: { label: string; value: string; tone?: s
   );
 }
 
-/** Avance de pago de una obra o de un presupuesto sin obra (solo administradores) */
-export function PaymentsPanel({ project, budget }: { project: Project; budget?: undefined } | { budget: Budget; project?: undefined }) {
+/**
+ * Avance de pago (solo administradores). En la pestaña de la obra: sus pagos, que se registran
+ * desde Presupuestos. En un presupuesto: sus pagos (con obra, los de la obra), y se registran ahí.
+ */
+export function PaymentsPanel({ project, budget }: { project: Project; budget?: undefined } | { budget: Budget; project?: Project }) {
   const repo = useRepo();
   const { run } = useAction();
   const finances = useFinances(true);
@@ -35,10 +38,12 @@ export function PaymentsPanel({ project, budget }: { project: Project; budget?: 
   const [editing, setEditing] = useState<{ payment: Payment | null; key: number } | null>(null);
   const [deleting, setDeleting] = useState<Payment | null>(null);
 
-  const finance = project && finances.data?.find((f) => f.project_id === project.id);
-  const own = (payments.data ?? []).filter((p) => (project ? p.project_id === project.id : p.budget_id === budget!.id));
-  // En un presupuesto sin obra, lo acordado son sus honorarios
-  const s = summarize(project ? finance : budgetAgreement(budget!), own);
+  const ofBudget = budget ? budgetPayments(budget, finances.data ?? [], payments.data ?? []) : null;
+  const finance = ofBudget ? ofBudget.finance : finances.data?.find((f) => f.project_id === project!.id);
+  const own = ofBudget ? ofBudget.own : (payments.data ?? []).filter((p) => p.project_id === project!.id);
+  const s = ofBudget ? ofBudget.summary : summarize(finance, own);
+  // En un presupuesto, lo acordado son sus honorarios (salvo que la obra ya tenga monto acordado)
+  const agreedLabel = !budget ? "Monto acordado" : ofBudget!.hasAgreement ? "Monto acordado de la obra" : "Honorarios";
 
   if (finances.isLoading || payments.isLoading) return <p className="text-sm text-muted-foreground">Cargando pagos…</p>;
 
@@ -47,12 +52,12 @@ export function PaymentsPanel({ project, budget }: { project: Project; budget?: 
       <div className="rounded-xl border bg-card p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="grid flex-1 grid-cols-2 gap-4 sm:grid-cols-4">
-            <Figure label={project ? "Monto acordado" : "Honorarios"} value={formatMoney(s.agreed, s.currency)} />
+            <Figure label={agreedLabel} value={formatMoney(s.agreed, s.currency)} />
             <Figure label="Pagado" value={formatMoney(s.paid, s.currency)} tone="text-emerald-700 dark:text-emerald-400" />
             <Figure label="Saldo pendiente" value={formatMoney(s.balance, s.currency)} tone={s.balance && s.balance > 0 ? "text-amber-700 dark:text-amber-400" : undefined} />
             <Figure label="Último pago" value={s.lastPaidOn ? formatDate(s.lastPaidOn) : "—"} />
           </div>
-          {project && (
+          {!budget && (
             <Button variant="outline" size="sm" onClick={() => setEditingFinance(true)}>
               <Pencil /> {finance ? "Editar monto acordado" : "Fijar monto acordado"}
             </Button>
@@ -65,7 +70,7 @@ export function PaymentsPanel({ project, budget }: { project: Project; budget?: 
           </div>
         ) : (
           <p className="mt-3 text-xs text-muted-foreground">
-            {project ? "Fijá el monto acordado" : "Poné los honorarios del presupuesto"} para ver el porcentaje pagado y el saldo.
+            {budget ? "Poné los honorarios del presupuesto" : "Fijá el monto acordado"} para ver el porcentaje pagado y el saldo.
           </p>
         )}
         {finance?.notes && <p className="mt-3 text-xs text-muted-foreground">{finance.notes}</p>}
@@ -73,8 +78,8 @@ export function PaymentsPanel({ project, budget }: { project: Project; budget?: 
 
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-medium">Pagos recibidos ({own.length})</h2>
-        {/* Los pagos de una obra se registran desde Presupuestos (botón "Registrar pago", arriba) */}
-        {project ? (
+        {/* En la obra no se registran: se hace desde Presupuestos (botón de arriba o en cada presupuesto) */}
+        {!budget ? (
           <Link href="/pagos" className="text-xs text-muted-foreground hover:text-foreground hover:underline">Se registran desde Presupuestos</Link>
         ) : (
           <Button size="sm" onClick={() => setEditing({ payment: null, key: Date.now() })}><Plus /> Registrar pago</Button>
@@ -85,7 +90,7 @@ export function PaymentsPanel({ project, budget }: { project: Project; budget?: 
         <EmptyState
           icon={Banknote}
           title="Todavía no hay pagos registrados"
-          description={project ? "Se registran desde Presupuestos, con el botón “Registrar pago”." : "Registrá cada adelanto o pago del cliente para seguir el saldo."}
+          description={budget ? "Registrá cada adelanto o pago del cliente para seguir el saldo." : "Se registran desde Presupuestos, con el botón “Registrar pago”."}
         />
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-card">
@@ -131,11 +136,15 @@ export function PaymentsPanel({ project, budget }: { project: Project; budget?: 
         </div>
       )}
 
-      {editingFinance && project && <FinanceDialog projectId={project.id} finance={finance} onClose={() => setEditingFinance(false)} />}
+      {editingFinance && !budget && <FinanceDialog projectId={project!.id} finance={finance} onClose={() => setEditingFinance(false)} />}
       {editing && (
         <PaymentDialog
           key={editing.key}
-          target={{ projectId: project?.id, budgetId: budget?.id, contractCurrency: s.currency }}
+          target={
+            editing.payment
+              ? { projectId: editing.payment.project_id ?? undefined, budgetId: editing.payment.budget_id ?? undefined, contractCurrency: s.currency }
+              : budgetPaymentTarget(budget!, finance)
+          }
           payment={editing.payment}
           onClose={() => setEditing(null)}
         />

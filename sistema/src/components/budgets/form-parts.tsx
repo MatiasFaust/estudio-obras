@@ -5,6 +5,7 @@ import { useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useProfiles } from "@/lib/data/hooks";
 import type { PaymentTerm } from "@/lib/types";
 import { parseMoney } from "@/lib/validation";
 import { money, termAmount } from "./budget-text";
@@ -69,6 +70,34 @@ export function PaymentTermsEditor({
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Responsables del presupuesto: texto libre, con atajos para sumar a los integrantes del estudio */
+export function ResponsibleInput({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
+  const profiles = useProfiles();
+  const missing = (profiles.data ?? [])
+    .filter((p) => p.active && p.arquitectura && p.full_name.trim())
+    .map((p) => p.full_name.trim())
+    .filter((n) => !value.toLowerCase().includes(n.toLowerCase()));
+  return (
+    <div className="grid gap-1.5">
+      <Input id={id} value={value} maxLength={160} onChange={(e) => onChange(e.target.value)} placeholder="Ej.: Roni y Jimena" />
+      {missing.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {missing.map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onChange(value.trim() ? `${value.trim()}, ${n}` : n)}
+              className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              + {n}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

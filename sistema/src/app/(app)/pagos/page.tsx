@@ -3,25 +3,29 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { ArrowLeft, Banknote, Calculator, ChevronDown, Download, FileText, Lock, NotebookPen, Pencil, Plus, Search, Settings2 } from "lucide-react";
+import {
+  ArrowLeft, Banknote, Calculator, ChevronDown, Copy, Download, FileText, Lock, MoreHorizontal, NotebookPen, Pencil, Plus, Search, Settings2, Trash2,
+} from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
 import { ProgressBar } from "@/components/common/progress-bar";
 import { SimpleSelect } from "@/components/common/simple-select";
+import { useDeleteBudgetText } from "@/components/budgets/budget-payments";
 import { downloadBudgetPdf } from "@/components/budgets/budget-pdf";
 import { BUDGET_KINDS, BUDGET_STATUS, BUDGET_STATUS_OPTIONS, BudgetStatusBadge } from "@/components/budgets/budget-status";
 import { CalculatorDialog } from "@/components/budgets/calculator-dialog";
-import { money } from "@/components/budgets/budget-text";
+import { budgetCopy, money } from "@/components/budgets/budget-text";
 import { ManualBudgetForm } from "@/components/budgets/manual-budget-form";
-import { PaymentDialog, type PaymentChoice } from "@/components/payments/payment-dialogs";
-import { budgetAgreement, summarize } from "@/components/payments/summary";
+import { budgetPaymentTarget, PaymentDialog, type PaymentChoice } from "@/components/payments/payment-dialogs";
+import { budgetPayments } from "@/components/payments/summary";
 import { useAction, useBudgets, useBudgetSettings, useClients, useFinances, usePayments, useProjects, useRepo, useSession } from "@/lib/data/hooks";
 import { formatDate, formatMoney, matches } from "@/lib/format";
 import { can } from "@/lib/permissions";
@@ -55,6 +59,8 @@ export default function BudgetsPage() {
   const [paying, setPaying] = useState<number | null>(null);
   // La calculadora se abre sola al entrar a Presupuestos
   const [calcOpen, setCalcOpen] = useState(true);
+  const [deleting, setDeleting] = useState<Budget | null>(null);
+  const deleteText = useDeleteBudgetText(deleting?.id);
 
   const projectById = useMemo(() => new Map((projects.data ?? []).map((p) => [p.id, p])), [projects.data]);
 
@@ -66,7 +72,7 @@ export default function BudgetsPage() {
   const rows = all.filter((b) => {
     const p = b.project_id ? projectById.get(b.project_id) : undefined;
     return (!status || b.status === status) && (!kind || b.kind === kind)
-      && matches(query, b.number, b.client_name, b.padron, b.service, b.address, p?.name, p?.code);
+      && matches(query, b.number, b.client_name, b.padron, b.service, b.address, b.responsible, p?.name, p?.code);
   });
 
   async function download(b: Budget) {
@@ -79,45 +85,37 @@ export default function BudgetsPage() {
     }
   }
 
-  // Avance de pago. Con obra: lo cobrado en la obra sobre su monto acordado (si la obra todavía no
-  // tiene, sobre los honorarios del presupuesto). Sin obra: sus propios pagos sobre los honorarios.
-  function paymentSummary(b: Budget) {
-    const pays = payments.data ?? [];
-    if (!b.project_id) return summarize(budgetAgreement(b), pays.filter((p) => p.budget_id === b.id));
-    const finance = finances.data?.find((f) => f.project_id === b.project_id);
-    return summarize(finance?.agreed_amount != null ? finance : budgetAgreement(b), pays.filter((p) => p.project_id === b.project_id));
-  }
-  const paidPercent = (b: Budget) => paymentSummary(b).percent ?? 0;
+  // Avance de pago (ver budgetPayments): con obra, lo cobrado en la obra; sin obra, sus propios pagos
+  const paymentsOf = (b: Budget) => budgetPayments(b, finances.data ?? [], payments.data ?? []);
+  const paidPercent = (b: Budget) => paymentsOf(b).summary.percent ?? 0;
 
-  // Presupuestos a los que se les puede registrar un pago: con obra, el pago va a la obra
-  // (si la obra no tiene monto acordado, pasan a serlo los honorarios); sin obra, al presupuesto.
+  // Presupuestos a los que se les puede registrar un pago (a dónde va: budgetPaymentTarget)
   const paymentChoices: PaymentChoice[] = all
     .filter((b) => b.status !== "rechazado")
     .map((b) => {
       const p = b.project_id ? projectById.get(b.project_id) : undefined;
-      const finance = b.project_id ? finances.data?.find((f) => f.project_id === b.project_id) : undefined;
-      const s = paymentSummary(b);
-      const hasAgreement = finance?.agreed_amount != null;
+      const { finance, hasAgreement, summary: s } = paymentsOf(b);
       return {
         value: b.id,
         label: `${b.number || "Sin número"} · ${b.client_name || "Sin cliente"}${p ? ` (${p.name})` : ""}`,
         hint: s.agreed !== null ? `${hasAgreement ? "Monto acordado de la obra" : "Honorarios"} ${formatMoney(s.agreed, s.currency)} · cobrado ${s.percent ?? 0} %` : undefined,
-        target: b.project_id
-          ? {
-              projectId: b.project_id,
-              contractCurrency: hasAgreement ? finance!.currency : b.currency,
-              agreement: hasAgreement || b.price === null ? undefined : {
-                agreed_amount: b.price,
-                currency: b.currency,
-                notes: b.number ? `Según el presupuesto ${b.number}.` : "Según el presupuesto.",
-              },
-            }
-          : { budgetId: b.id, contractCurrency: b.currency },
+        target: budgetPaymentTarget(b, finance),
       };
     });
 
+  const label = (b: Budget) => (b.number ? `Presupuesto ${b.number}` : "Presupuesto");
+
+  /** Copia del presupuesto (sin número y pendiente), que se abre para completarla */
+  async function duplicate(b: Budget) {
+    const result: { copy?: Budget } = {};
+    const ok = await run(async () => {
+      result.copy = await repo.createBudget(budgetCopy(b));
+    }, `${label(b)} duplicado: poné el número de la copia`);
+    if (ok && result.copy) router.push(`/pagos/${result.copy.id}`);
+  }
+
   const changeStatus = (b: Budget, next: BudgetStatus) =>
-    next !== b.status && run(() => repo.updateBudget(b.id, { status: next }), `${b.number ? `Presupuesto ${b.number}` : "Presupuesto"}: ${BUDGET_STATUS[next].label}`);
+    next !== b.status && run(() => repo.updateBudget(b.id, { status: next }), `${label(b)}: ${BUDGET_STATUS[next].label}`);
 
   return (
     <>
@@ -137,7 +135,7 @@ export default function BudgetsPage() {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-72">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Número, cliente, padrón…" className="pl-8" aria-label="Buscar presupuestos" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Número, cliente, padrón, responsable…" className="pl-8" aria-label="Buscar presupuestos" />
         </div>
         <SimpleSelect value={status} onChange={setStatus} options={STATUS_FILTER} placeholder="Todos los estados" className="w-44" aria-label="Filtrar por estado" />
         <SimpleSelect value={kind} onChange={setKind} options={KIND_FILTER} placeholder="Todos los tipos" className="w-52" aria-label="Filtrar por tipo" />
@@ -161,9 +159,10 @@ export default function BudgetsPage() {
                 <TableHead>Cliente</TableHead>
                 <TableHead className="hidden md:table-cell">Servicio</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead className="hidden w-40 sm:table-cell">Avance</TableHead>
+                <TableHead className="hidden w-28 sm:table-cell">Avance</TableHead>
+                <TableHead className="hidden lg:table-cell">Responsables</TableHead>
                 <TableHead className="text-right">Honorarios</TableHead>
-                <TableHead className="w-24" />
+                <TableHead className="w-28" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -171,16 +170,17 @@ export default function BudgetsPage() {
                 <TableRow key={b.id}>
                   <TableCell>
                     <Link href={`/pagos/${b.id}`} className="font-medium hover:underline">{b.number || "Sin número"}</Link>
-                    <span className="block text-xs text-muted-foreground">{BUDGET_KINDS[b.kind].short} · {formatDate(b.issued_on)}</span>
+                    <span className="block text-xs text-muted-foreground">{BUDGET_KINDS[b.kind].short}</span>
+                    <span className="block text-xs text-muted-foreground">{formatDate(b.issued_on)}</span>
                   </TableCell>
                   <TableCell className="hidden tabular-nums sm:table-cell">{b.padron || "—"}</TableCell>
-                  <TableCell className="max-w-52">
+                  <TableCell className="max-w-44">
                     <span className="block truncate">{b.client_name || "—"}</span>
                     {b.project_id && projectById.get(b.project_id) && (
                       <span className="block truncate text-xs text-muted-foreground">{projectById.get(b.project_id)!.name}</span>
                     )}
                   </TableCell>
-                  <TableCell className="hidden max-w-56 truncate text-muted-foreground md:table-cell">{b.service || "—"}</TableCell>
+                  <TableCell className="hidden max-w-32 truncate text-muted-foreground md:table-cell" title={b.service || undefined}>{b.service || "—"}</TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger
@@ -203,9 +203,10 @@ export default function BudgetsPage() {
                   <TableCell className="hidden sm:table-cell">
                     <PaymentProgress budget={b} percent={paidPercent(b)} />
                   </TableCell>
+                  <TableCell className="hidden max-w-32 truncate text-muted-foreground lg:table-cell" title={b.responsible || undefined}>{b.responsible || "—"}</TableCell>
                   <TableCell className="text-right whitespace-nowrap tabular-nums">{b.price !== null ? money(b.price, b.currency) : "—"}</TableCell>
                   <TableCell>
-                    <div className="flex justify-end gap-1">
+                    <div className="flex justify-end gap-0.5">
                       {b.kind === "membretado" && (
                         <Button size="icon-sm" variant="outline" disabled={busy === b.id || !settings.data} onClick={() => download(b)} aria-label={`Descargar PDF de ${b.number || "presupuesto"}`} title="Descargar PDF">
                           <Download />
@@ -214,6 +215,20 @@ export default function BudgetsPage() {
                       <Link href={`/pagos/${b.id}`} className={buttonVariants({ size: "icon-sm", variant: "ghost" })} aria-label={`Editar ${b.number || "presupuesto"}`} title="Editar">
                         <Pencil />
                       </Link>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button size="icon-sm" variant="ghost" aria-label={`Más opciones de ${b.number || "presupuesto"}`} title="Duplicar o eliminar">
+                              <MoreHorizontal />
+                            </Button>
+                          }
+                        />
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem onClick={() => duplicate(b)}><Copy /> Duplicar</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem variant="destructive" onClick={() => setDeleting(b)}><Trash2 /> Eliminar</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -224,6 +239,14 @@ export default function BudgetsPage() {
       )}
 
       {paying && <PaymentDialog key={paying} choices={paymentChoices} onClose={() => setPaying(null)} />}
+
+      <ConfirmDialog
+        open={!!deleting}
+        onOpenChange={(o) => !o && setDeleting(null)}
+        title={`¿Eliminar ${deleting?.number ? `el presupuesto ${deleting.number}` : "el presupuesto"}?`}
+        description={deleteText}
+        onConfirm={() => run(() => repo.deleteBudget(deleting!.id), "Presupuesto eliminado")}
+      />
 
       <CalculatorDialog
         open={calcOpen}
@@ -285,15 +308,15 @@ export default function BudgetsPage() {
   );
 }
 
-/** Barrita de cuánto se cobró; lleva a donde se registran los pagos (la obra o el propio presupuesto) */
+/** Barrita de cuánto se cobró; lleva a los pagos del presupuesto (sección "Pagos" de su página) */
 function PaymentProgress({ budget: b, percent }: { budget: Budget; percent: number }) {
   if (b.status === "rechazado") return <span className="text-muted-foreground">—</span>;
   return (
     <Link
-      href={b.project_id ? `/obras/${b.project_id}?tab=pagos` : `/pagos/${b.id}#pagos`}
-      className="block w-36 rounded-sm outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring"
+      href={`/pagos/${b.id}#pagos`}
+      className="block w-24 rounded-sm outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring"
       aria-label={`Pagos de ${b.number || "presupuesto"}: ${percent}% cobrado`}
-      title={b.project_id ? "Ver y registrar los pagos de la obra" : "Ver y registrar los pagos del presupuesto"}
+      title="Ver y registrar los pagos"
     >
       <ProgressBar value={percent} />
     </Link>

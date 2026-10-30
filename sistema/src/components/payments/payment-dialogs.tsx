@@ -10,10 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/components/common/field";
 import { SimpleSelect } from "@/components/common/simple-select";
+import { money, termAmount } from "@/components/budgets/budget-text";
 import { CURRENCIES, PAYMENT_METHODS } from "@/lib/constants";
 import { useAction, useRepo } from "@/lib/data/hooks";
 import { convertAmount, formatMoney } from "@/lib/format";
-import type { Currency, Finance, FinanceInput, Payment } from "@/lib/types";
+import type { Budget, Currency, Finance, FinanceInput, Payment } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { nullIfEmpty, parseMoney, paymentSchema, type PaymentFormValues } from "@/lib/validation";
 
 const CURRENCY_OPTIONS = Object.entries(CURRENCIES).map(([value, label]) => ({ value, label }));
@@ -79,7 +81,41 @@ export interface PaymentTarget {
   contractCurrency: Currency;
   /** Si la obra todavía no tiene monto acordado, se fija con esto antes de registrar el pago */
   agreement?: FinanceInput;
+  /** Cuotas de la forma de pago del presupuesto: al elegir una se completa el monto */
+  terms?: TermOption[];
 }
+
+export interface TermOption {
+  label: string;
+  percent: number;
+  amount: number;
+  currency: Currency;
+}
+
+/**
+ * A dónde va el pago de un presupuesto: con obra, a la obra (si la obra todavía no tiene monto
+ * acordado, pasan a serlo los honorarios); sin obra, al propio presupuesto.
+ */
+export function budgetPaymentTarget(b: Budget, finance: Finance | undefined): PaymentTarget {
+  const terms = b.price === null ? [] : b.payment_terms
+    .filter((t) => t.percent > 0)
+    .map((t) => ({ label: t.label.trim(), percent: t.percent, amount: termAmount(b.price!, t.percent), currency: b.currency }));
+  if (!b.project_id) return { budgetId: b.id, contractCurrency: b.currency, terms };
+  const hasAgreement = finance?.agreed_amount != null;
+  return {
+    projectId: b.project_id,
+    contractCurrency: hasAgreement ? finance!.currency : b.currency,
+    agreement: hasAgreement || b.price === null ? undefined : {
+      agreed_amount: b.price,
+      currency: b.currency,
+      notes: b.number ? `Según el presupuesto ${b.number}.` : "Según el presupuesto.",
+    },
+    terms,
+  };
+}
+
+/** Concepto que se propone al elegir una cuota: "Cuota 35 % al comenzar los trabajos" */
+const termConcept = (t: TermOption) => `Cuota ${t.percent} %${t.label ? ` ${t.label}` : ""}`;
 
 export interface PaymentChoice {
   value: string;
@@ -105,8 +141,11 @@ export function PaymentDialog({
   const { run, pending } = useAction();
   const [choice, setChoice] = useState("");
   const [choiceError, setChoiceError] = useState<string | null>(null);
+  // Cuota elegida (índice); deja de marcarse si después se cambia el monto a mano
+  const [term, setTerm] = useState<number | null>(null);
   const chosen = choices?.find((c) => c.value === choice);
   const current = target ?? chosen?.target;
+  const terms = payment ? [] : current?.terms ?? [];
   const contractCurrency = current?.contractCurrency ?? "UYU";
   const { register, control, handleSubmit, setError, setValue, formState: { errors } } = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
@@ -125,6 +164,15 @@ export function PaymentDialog({
   const amountText = useWatch({ control, name: "amount" });
   const rateText = useWatch({ control, name: "exchange_rate" });
   const needsRate = currency !== contractCurrency;
+  const pickedTerm = term !== null && terms[term] && amountText === asText(terms[term].amount) && currency === terms[term].currency ? term : null;
+
+  function pickTerm(i: number) {
+    const t = terms[i];
+    setTerm(i);
+    setValue("amount", asText(t.amount), { shouldValidate: !!errors.amount });
+    setValue("currency", t.currency);
+    setValue("concept", termConcept(t), { shouldValidate: !!errors.concept });
+  }
   const preview = needsRate
     ? convertAmount(parseMoney(amountText) || 0, currency, contractCurrency, parseMoney(rateText) || null)
     : null;
@@ -161,7 +209,7 @@ export function PaymentDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         <form onSubmit={submit} noValidate className="grid gap-4">
           <DialogHeader>
             <DialogTitle>{payment ? "Editar pago" : "Registrar pago"}</DialogTitle>
@@ -173,6 +221,7 @@ export function PaymentDialog({
                 onChange={(v) => {
                   setChoice(v);
                   setChoiceError(null);
+                  setTerm(null);
                   const next = choices.find((c) => c.value === v)?.target;
                   if (next) setValue("currency", next.contractCurrency);
                 }}
@@ -181,6 +230,27 @@ export function PaymentDialog({
                 aria-label="Presupuesto del pago"
                 aria-invalid={!!choiceError}
               />
+            </Field>
+          )}
+          {terms.length > 0 && (
+            <Field label="Cuota de la forma de pago" optional hint="Elegí una para completar el monto, o escribilo a mano.">
+              <div className="grid gap-1.5" role="group" aria-label="Cuotas del presupuesto">
+                {terms.map((t, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    aria-pressed={pickedTerm === i}
+                    onClick={() => pickTerm(i)}
+                    className={cn(
+                      "flex items-center justify-between gap-3 rounded-md border px-3 py-1.5 text-left text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      pickedTerm === i ? "border-primary bg-primary text-primary-foreground" : "hover:bg-accent",
+                    )}
+                  >
+                    <span><span className="font-medium tabular-nums">{t.percent} %</span> {t.label}</span>
+                    <span className={cn("shrink-0 tabular-nums", pickedTerm === i ? "opacity-80" : "text-muted-foreground")}>{money(t.amount, t.currency)}</span>
+                  </button>
+                ))}
+              </div>
             </Field>
           )}
           <Field label="Concepto" htmlFor="pay-concept" error={errors.concept?.message}>

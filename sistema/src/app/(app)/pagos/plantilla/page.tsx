@@ -102,6 +102,9 @@ function TemplateForm({ initial }: { initial: BudgetSettings }) {
           <Field label="Dirección" htmlFor="tp-address">
             <Input id="tp-address" value={t.address} onChange={(e) => set("address", e.target.value)} />
           </Field>
+          <Field label="Logo principal" hint="Va arriba a la izquierda de la hoja. Sin logo, va el cuadrado negro con “RF.”.">
+            <ImageInput label="Logo principal" value={t.logo} onChange={(v) => set("logo", v)} />
+          </Field>
         </CardContent>
       </Card>
 

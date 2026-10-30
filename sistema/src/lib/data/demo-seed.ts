@@ -325,6 +325,7 @@ export function createBudgetDemoData(): Pick<DemoDB, "budgets" | "budgetSettings
       lines: ["@estudio.demo", "099 000 000", "estudio@demo.local"],
       partners: [{ name: "Paisajismo Demo", lines: ["@paisajismo.demo", "paisajismo@demo.local"], logo: null }],
     },
+    logo: null,
     calc_types: [
       { name: "Obra nueva", fee_per_m2: 1500, wages_per_m2: 6, build_cost_per_m2: 45000 },
       { name: "Reforma", fee_per_m2: 1200, wages_per_m2: 1.5, build_cost_per_m2: 25000 },
@@ -342,7 +343,7 @@ export function createBudgetDemoData(): Pick<DemoDB, "budgets" | "budgetSettings
     intro: "De acuerdo a vuestra amable solicitud tengo el agrado de presupuestar los trabajos de presentación de proyecto de vivienda, área aproximada 120 m², padrón 9001.",
     price: 48000, currency: "USD", iva_mode: "mas_iva", payment_terms, includes,
     excludes: "No se incluye Dirección de Obra.", expenses_text: budgetSettings.expenses_text, expenses_amount: 1200,
-    wages_days: 129, wages_amount: 6800, note: "", status: "aceptado",
+    wages_days: 129, wages_amount: 6800, note: "", status: "aceptado", responsible: "Laura",
     created_by: DEMO_USERS.admin, created_at: stamp(-20), updated_at: stamp(-20),
   }];
   return { budgets, budgetSettings };

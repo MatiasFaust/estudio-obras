@@ -36,6 +36,8 @@ const s = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "flex-end", marginBottom: 22 },
   logo: { width: 48, height: 48, backgroundColor: INK, justifyContent: "center", alignItems: "center", marginRight: 8 },
   logoText: { color: "#ffffff", fontSize: 24, fontWeight: 300, letterSpacing: -0.5 },
+  // Logo subido en la plantilla: misma altura que el cuadrado, el ancho según la imagen
+  logoImage: { height: 48, maxWidth: 160, objectFit: "contain", marginRight: 8 },
   studio: { flexGrow: 1, justifyContent: "space-between", height: 48 },
   studioName: { fontSize: 11, fontWeight: 600, marginTop: -1 },
   small: { fontSize: 8.5, color: GRAY, fontWeight: 300 },
@@ -123,7 +125,11 @@ export function BudgetDocument({ budget: b, settings: t }: { budget: Budget; set
       <Page size="A4" style={s.page}>
         {/* Encabezado completo en la primera página; en las siguientes, solo la fecha */}
         <View style={s.header}>
-          <View style={s.logo}><Text style={s.logoText}>RF.</Text></View>
+          {t.logo ? (
+            <PdfImage src={t.logo} style={s.logoImage} />
+          ) : (
+            <View style={s.logo}><Text style={s.logoText}>RF.</Text></View>
+          )}
           <View style={s.studio}>
             <Text style={s.studioName}>{t.studio_name}</Text>
             <Text style={s.small}>{t.tagline}</Text>

@@ -11,7 +11,7 @@ import { useAction, useRepo } from "@/lib/data/hooks";
 import type { Budget, BudgetInput, BudgetSettings, Client, Project } from "@/lib/types";
 import { BUDGET_STATUS_OPTIONS } from "./budget-status";
 import { newBudgetFrom } from "./budget-text";
-import { numText, parseOptional } from "./form-parts";
+import { numText, parseOptional, PaymentTermsEditor, ResponsibleInput } from "./form-parts";
 
 const CURRENCY_OPTIONS = Object.entries(CURRENCIES).map(([value, label]) => ({ value, label }));
 export const NO_PROJECT = "sin-obra";
@@ -76,7 +76,10 @@ export function ManualBudgetForm({
     if (n === null || Number.isNaN(n) || n < 0) err.price = "Ingresá los honorarios (ej.: 85.000)";
     setErrors(err);
     if (Object.keys(err).length) return;
-    const input: BudgetInput = { ...b, kind: "manual", price: n, client_name: b.client_name.trim(), service: b.service.trim() };
+    const input: BudgetInput = {
+      ...b, kind: "manual", price: n, client_name: b.client_name.trim(), service: b.service.trim(), responsible: b.responsible.trim(),
+      payment_terms: b.payment_terms.filter((x) => x.label.trim() || x.percent),
+    };
     const result: { saved?: Budget } = {};
     const ok = await run(async () => {
       if (budget) {
@@ -121,6 +124,17 @@ export function ManualBudgetForm({
           <Input id="mb-date" type="date" value={b.issued_on} onChange={(e) => set("issued_on", e.target.value)} />
         </Field>
       </div>
+      <Field label="Responsables" htmlFor="mb-responsible" optional>
+        <ResponsibleInput id="mb-responsible" value={b.responsible} onChange={(v) => set("responsible", v)} />
+      </Field>
+      <Field label="Forma de pago" optional hint="Las cuotas se pueden elegir al registrar un pago.">
+        <PaymentTermsEditor
+          terms={b.payment_terms}
+          onChange={(v) => set("payment_terms", v)}
+          price={(() => { const n = parseOptional(price); return n === null || Number.isNaN(n) ? null : n; })()}
+          currency={b.currency}
+        />
+      </Field>
       <Field label="Obra" hint="Opcional. Si la vinculás, al aceptarlo pasa a ser el monto a cobrar de esa obra.">
         <SimpleSelect
           value={b.project_id ?? NO_PROJECT}

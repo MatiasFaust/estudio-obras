@@ -72,6 +72,20 @@ export function parseMarks(text: string): Span[] {
   return out;
 }
 
+/** Copia de un presupuesto: igual, pero sin número, pendiente y con la fecha de hoy */
+export function budgetCopy(b: Budget): BudgetInput {
+  const { id: _id, created_by: _by, created_at: _at, updated_at: _up, ...rest } = b;
+  void [_id, _by, _at, _up];
+  return {
+    ...rest,
+    number: "",
+    status: "pendiente",
+    issued_on: format(new Date(), "yyyy-MM-dd"),
+    payment_terms: b.payment_terms.map((t) => ({ ...t })),
+    includes: [...b.includes],
+  };
+}
+
 /** Valores iniciales de un presupuesto nuevo, tomados de la plantilla y (si hay) de la obra */
 export function newBudgetFrom(
   settings: BudgetSettings,
@@ -103,5 +117,6 @@ export function newBudgetFrom(
     wages_amount: null,
     note: kind === "manual" ? "" : settings.note,
     status: "pendiente",
+    responsible: "",
   };
 }

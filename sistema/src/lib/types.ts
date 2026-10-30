@@ -348,6 +348,8 @@ export interface BudgetSettings {
   note: string;
   signers: BudgetSigner[];
   footer: { lines: string[]; partners: BudgetPartner[] };
+  /** Logo principal de la hoja membretada (data URL). Sin logo va el cuadrado con "RF." */
+  logo: string | null;
   // Calculadora
   calc_types: CalcType[];
   wage_value: number | null;
@@ -383,6 +385,8 @@ export interface Budget {
   wages_amount: number | null;
   note: string;
   status: BudgetStatus;
+  /** Quién se encarga (texto libre, ej.: "Roni y Jimena") */
+  responsible: string;
   created_by: string | null;
   created_at: string;
   updated_at: string;

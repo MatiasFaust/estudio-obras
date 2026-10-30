@@ -17,7 +17,7 @@ import { downloadBudgetPdf, previewBudgetPdf, printBudgetPdf } from "@/component
 import { BUDGET_STATUS_OPTIONS } from "@/components/budgets/budget-status";
 import { fillIntro, IVA_LABEL, newBudgetFrom, trabajoFrom } from "@/components/budgets/budget-text";
 import { readPrefill, type CalcPrefill } from "@/components/budgets/calculator";
-import { linesToText, numText, parseOptional, PaymentTermsEditor, textToLines } from "@/components/budgets/form-parts";
+import { linesToText, numText, parseOptional, PaymentTermsEditor, ResponsibleInput, textToLines } from "@/components/budgets/form-parts";
 import { fillFromProject, ManualBudgetForm, NO_PROJECT, projectOptions } from "@/components/budgets/manual-budget-form";
 import { CURRENCIES } from "@/lib/constants";
 import { useAction, useBudgets, useBudgetSettings, useClients, useProjects, useRepo, useSession } from "@/lib/data/hooks";
@@ -158,6 +158,7 @@ function BudgetForm({
     return {
       ...b, ...nums,
       kind: "membretado",
+      responsible: b.responsible.trim(),
       includes: textToLines(includes),
       payment_terms: b.payment_terms.filter((x) => x.label.trim() || x.percent),
     };
@@ -273,6 +274,9 @@ function BudgetForm({
           </Field>
           <Field label="Estado">
             <SimpleSelect value={b.status} onChange={(v) => set("status", v as Budget["status"])} options={BUDGET_STATUS_OPTIONS} aria-label="Estado" />
+          </Field>
+          <Field label="Responsables" htmlFor="bg-responsible" optional className="sm:col-span-3">
+            <ResponsibleInput id="bg-responsible" value={b.responsible} onChange={(v) => set("responsible", v)} />
           </Field>
         </CardContent>
       </Card>

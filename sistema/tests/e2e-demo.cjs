@@ -215,11 +215,13 @@ async function logout(page) {
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
   await sleep(1000);
   const pagosTxt = await page.$eval('main', (e) => e.textContent);
-  check(['N.º', 'Padrón', 'Cliente', 'Servicio', 'Estado', 'Avance', 'Honorarios'].every((h) => pagosTxt.includes(h)) && pagosTxt.includes('2094') && pagosTxt.includes('Familia Ejemplo Acosta') && !pagosTxt.includes('Creada el'),
-    'menú Presupuestos: tabla con N.º, padrón, cliente, servicio, estado, avance y honorarios');
-  // Avance de pago: la obra p1 cobró US$ 27.000 de US$ 48.000 (56 %) y la barrita lleva a sus pagos
+  check(['N.º', 'Padrón', 'Cliente', 'Servicio', 'Estado', 'Avance', 'Responsables', 'Honorarios'].every((h) => pagosTxt.includes(h)) && pagosTxt.includes('2094') && pagosTxt.includes('Familia Ejemplo Acosta') && !pagosTxt.includes('Creada el'),
+    'menú Presupuestos: tabla con N.º, padrón, cliente, servicio, estado, avance, responsables y honorarios');
+  const row2094 = await page.$$eval('main tbody tr', (rows) => rows.map((r) => r.textContent).find((t) => t.includes('2094')) ?? '');
+  check(row2094.includes('Laura'), 'columna Responsables: muestra quién se encarga');
+  // Avance de pago: la obra p1 cobró US$ 27.000 de US$ 48.000 (56 %) y la barrita lleva a los pagos del presupuesto
   const avancePago = await page.$eval('[aria-label^="Pagos de 2094"]', (a) => ({ href: a.getAttribute('href'), pct: a.querySelector('[role=progressbar]')?.getAttribute('aria-valuenow') })).catch(() => null);
-  check(avancePago?.pct === '56' && avancePago?.href === '/obras/p1?tab=pagos', `avance de pago del presupuesto aceptado: 56 % y enlace a los pagos (${JSON.stringify(avancePago)})`);
+  check(avancePago?.pct === '56' && avancePago?.href === '/pagos/b1#pagos', `avance de pago del presupuesto aceptado: 56 % y enlace a sus pagos, sin ir a la obra (${JSON.stringify(avancePago)})`);
   check(!!(await page.$$eval('main button', (bs) => bs.some((b) => b.textContent.trim() === 'Presupuesto'))), 'menú Presupuestos: botón "+ Presupuesto" arriba');
   await page.goto(`${BASE}/obras/p1`, { waitUntil: 'networkidle2' });
   await sleep(1000);
@@ -264,6 +266,25 @@ async function logout(page) {
   const panel = await page.$eval('main', (e) => e.textContent);
   check(panel.includes('US$ 29.000,00') && panel.includes('US$ 19.000,00') && panel.includes('Certificado de avance 3'), 'pago registrado en la obra: pagado 29.000 y saldo 19.000');
   await page.screenshot({ path: path.join(OUT, 's8-pagos.png') });
+  // El historial de pagos también está en el presupuesto (con obra: los de la obra) y se registra ahí
+  await page.goto(`${BASE}/pagos/b1#pagos`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('#pagos', { timeout: 10000 });
+  await sleep(800);
+  const b1Pagos = await page.$eval('#pagos', (e) => e.textContent);
+  check(b1Pagos.includes('Monto acordado de la obra') && b1Pagos.includes('Certificado de avance 3') && b1Pagos.includes('US$ 19.000,00'),
+    'presupuesto con obra: muestra el historial de pagos ahí mismo');
+  await clickText(page, '#pagos button', 'Registrar pago');
+  await page.waitForSelector('[aria-label="Cuotas del presupuesto"]', { timeout: 10000 });
+  const cuotas = await texts(page, '[aria-label="Cuotas del presupuesto"] button');
+  check(cuotas.length === 4 && cuotas[0].includes('35 %') && cuotas[0].includes('US$ 16.800'), `registrar pago: ofrece las cuotas de la forma de pago (${cuotas.join(' | ')})`);
+  await clickText(page, '[aria-label="Cuotas del presupuesto"] button', '10 %');
+  await sleep(300);
+  const filled = await page.evaluate(() => ({ amount: document.querySelector('#pay-amount').value, concept: document.querySelector('#pay-concept').value }));
+  check(filled.amount === '4.800' && filled.concept === 'Cuota 10 % contra la habilitación final', `al elegir la cuota se completan monto y concepto (${filled.amount} | ${filled.concept})`);
+  await clickText(page, '[role=dialog] button[type=submit]', 'Guardar pago');
+  await sleep(1200);
+  const b1Pct = await page.$eval('#pagos [role=progressbar]', (e) => e.getAttribute('aria-valuenow')).catch(() => null);
+  check(page.url().includes('/pagos/b1') && b1Pct === '70', `el pago queda en el presupuesto: 33.800 de 48.000 = ${b1Pct} %`);
 
   // --- Presupuestos en PDF
   // Atrapa la descarga del PDF y devuelve sus primeros bytes y su nombre
@@ -298,11 +319,24 @@ async function logout(page) {
   await page.$eval('#tp-name', (e) => { e.select?.(); });
   await page.click('#tp-name', { clickCount: 3 });
   await page.type('#tp-name', 'Estudio Prueba');
+  // Logo principal de la hoja membretada
+  await (await page.$('input[type=file][aria-label="Logo principal"]')).uploadFile(path.join(__dirname, '..', 'public', 'logos', 'arquitectura.png'));
+  await page.waitForSelector('img[alt="Logo principal"]', { timeout: 5000 }).catch(() => {});
   await clickText(page, 'button[type=submit]', 'Guardar plantilla');
   await sleep(800);
   await page.goto(`${BASE}/pagos/plantilla`, { waitUntil: 'networkidle2' });
   await page.waitForSelector('#tp-name', { timeout: 10000 });
   check((await page.$eval('#tp-name', (e) => e.value)) === 'Estudio Prueba', 'plantilla: se guarda y se vuelve a cargar');
+  check(!!(await page.$('img[alt="Logo principal"]')), 'plantilla: se guarda el logo principal');
+  // El PDF lleva el logo nuevo (la imagen lo hace más pesado)
+  await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
+  await page.keyboard.press('Escape');
+  await sleep(500);
+  const logoPdfPromise = catchPdf();
+  await page.click('[aria-label="Descargar PDF de 2095"]');
+  const logoPdf = await Promise.race([logoPdfPromise, sleep(15000).then(() => null)]);
+  check(!!logoPdf && logoPdf.head === '%PDF-' && !!pdfFile && logoPdf.size > pdfFile.size + 3000, `PDF con el logo principal (${pdfFile?.size} → ${logoPdf?.size} bytes)`);
   // Nuevo presupuesto desde el menú, eligiendo la obra; al aceptarlo pasa a ser el monto acordado
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
   await sleep(800);
@@ -400,12 +434,13 @@ async function logout(page) {
   await page.type('#mb-service', 'Regularización');
   await page.type('#mb-price', '85.000');
   await page.type('#mb-number', '3001');
+  await page.type('#mb-responsible', 'Roni');
   await clickText(page, '[role=dialog] button[type=submit]', 'Guardar presupuesto');
   await sleep(1200);
   check(!(await page.$('#mb-client')), 'manual: al guardar se cierra la ventana');
   const manualRow = await page.$$eval('main tbody tr', (rows) => rows.map((r) => r.textContent).find((t) => t.includes('3001')) ?? '');
-  check(manualRow.includes('7788') && manualRow.includes('Cliente Manual Prueba') && manualRow.includes('Regularización') && manualRow.includes('Pendiente') && manualRow.includes('$ 85.000'),
-    'manual: aparece en la tabla con padrón, cliente, servicio, estado y honorarios');
+  check(manualRow.includes('7788') && manualRow.includes('Cliente Manual Prueba') && manualRow.includes('Regularización') && manualRow.includes('Pendiente') && manualRow.includes('$ 85.000') && manualRow.includes('Roni'),
+    'manual: aparece en la tabla con padrón, cliente, servicio, estado, responsable y honorarios');
   check(!(await page.$('[aria-label="Descargar PDF de 3001"]')) && !!(await page.$('[aria-label="Descargar PDF de 2097"]')), 'PDF solo en los presupuestos con hoja membretada');
   // Cambiar el estado desde la tabla
   await page.click('[aria-label="Cambiar estado de 3001"]');
@@ -458,6 +493,43 @@ async function logout(page) {
   check((await page.$eval('[role=alertdialog], [role=dialog]', (e) => e.textContent).catch(() => '')).includes('También se elimina su pago registrado'), 'al eliminar avisa que se borran sus pagos');
   await page.keyboard.press('Escape');
   await sleep(400);
+  // Duplicar y eliminar desde la tabla
+  const openList = async () => {
+    await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
+    await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
+    await page.keyboard.press('Escape');
+    await sleep(500);
+  };
+  await openList();
+  const rowsBefore = (await page.$$('main tbody tr')).length;
+  await page.click('[aria-label="Más opciones de 3001"]');
+  await sleep(400);
+  await clickText(page, '[role=menuitem]', 'Duplicar');
+  await page.waitForFunction((p) => location.pathname.startsWith('/pagos/') && location.pathname !== p, { timeout: 10000 }, manualPath).catch(() => {});
+  await page.waitForSelector('#mb-client', { timeout: 10000 });
+  await sleep(500);
+  const copy = await page.evaluate(() => ({
+    path: location.pathname, client: document.querySelector('#mb-client').value, number: document.querySelector('#mb-number').value,
+    resp: document.querySelector('#mb-responsible').value, pays: document.querySelector('#pagos')?.textContent ?? '',
+  }));
+  check(copy.path !== manualPath && copy.client === 'Cliente Manual Prueba' && copy.number === '' && copy.resp === 'Roni' && !copy.pays.includes('Seña del manual'),
+    `duplicar: abre la copia sin número y sin los pagos (${copy.client} | "${copy.number}" | ${copy.resp})`);
+  await openList();
+  check((await page.$$('main tbody tr')).length === rowsBefore + 1, 'duplicar: la copia aparece en la tabla');
+  for (const r of await page.$$('main tbody tr')) {
+    const t = await r.evaluate((e) => e.textContent);
+    if (t.includes('Sin número') && t.includes('Cliente Manual Prueba')) {
+      await (await r.$('[aria-label^="Más opciones"]')).click();
+      break;
+    }
+  }
+  await sleep(400);
+  await clickText(page, '[role=menuitem]', 'Eliminar');
+  await sleep(400);
+  await clickText(page, '[role=alertdialog] button', 'Eliminar');
+  await sleep(1000);
+  const rowsAfter = await page.$$eval('main tbody tr', (rows) => rows.map((r) => r.textContent));
+  check(rowsAfter.length === rowsBefore && rowsAfter.some((t) => t.includes('3001')), 'eliminar desde la tabla: se borra la copia y queda el original');
   // La dirección vieja dentro de la obra lleva al editor nuevo
   await page.goto(`${BASE}/obras/p1/presupuestos/b1`, { waitUntil: 'networkidle2' });
   await page.waitForFunction(() => location.pathname === '/pagos/b1', { timeout: 10000 }).catch(() => {});

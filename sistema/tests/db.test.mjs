@@ -224,6 +224,12 @@ check((await as(ARQ, `select id from budget_settings`)).rows.length === 0, 'arqu
 await as(ADMIN, `update budget_settings set studio_name = 'Estudio SQL', signers = '[{"name":"Firma","title":"Arq.","image":"data:image/png;base64,AAAA"}]'`);
 check((await as(ADMIN, `select studio_name from budget_settings`)).rows[0].studio_name === 'Estudio SQL', 'administrador edita la plantilla');
 check(!!(await fails_(ADMIN, `insert into budget_settings (id) values (false)`)), 'la plantilla es una sola');
+await as(ADMIN, `update budget_settings set logo = 'data:image/png;base64,AAAA'`);
+check((await as(ADMIN, `select logo from budget_settings`)).rows[0].logo.startsWith('data:image/png'), 'plantilla: guarda el logo principal');
+await as(ADMIN, `update budgets set responsible = 'Roni y Jimena' where id = '${budget.id}'`);
+check((await as(ADMIN, `select responsible from budgets where id = '${budget.id}'`)).rows[0].responsible === 'Roni y Jimena', 'presupuesto: guarda los responsables');
+check((await as(ADMIN, `select responsible from budgets where number = '2096'`)).rows[0].responsible === '', 'presupuesto: sin responsables queda vacío');
+check(!!(await fails_(ADMIN, `update budgets set responsible = repeat('x', 200) where id = '${budget.id}'`)), 'presupuesto: rechaza responsables demasiado largos');
 await as(ADMIN, `update budget_settings set calc_types = '[{"name":"Reforma","fee_per_m2":1200,"wages_per_m2":1.5,"build_cost_per_m2":null}]', wage_value = 2200, expenses_fixed = 15000`);
 const calc = (await as(ADMIN, `select calc_types, wage_value::float as w, iva_rate::float as iva from budget_settings`)).rows[0];
 check(calc.calc_types[0].name === 'Reforma' && calc.w === 2200 && calc.iva === 22, 'calculadora: valores guardados en la plantilla (IVA 22% por defecto)');

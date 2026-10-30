@@ -16,6 +16,17 @@ export interface PaymentSummary {
   lastPaidOn: string | null;
 }
 
+/**
+ * Pagos de un presupuesto. Con obra: los de la obra, sobre su monto acordado (si la obra todavía
+ * no tiene, sobre los honorarios del presupuesto). Sin obra: los suyos, sobre los honorarios.
+ */
+export function budgetPayments(b: Budget, finances: Finance[], payments: Payment[]) {
+  const finance = b.project_id ? finances.find((f) => f.project_id === b.project_id) : undefined;
+  const hasAgreement = finance?.agreed_amount != null;
+  const own = payments.filter((p) => (b.project_id ? p.project_id === b.project_id : p.budget_id === b.id));
+  return { finance, hasAgreement, own, summary: summarize(hasAgreement ? finance : budgetAgreement(b), own) };
+}
+
 /** Resumen del avance de pago de una obra o presupuesto (montos en la moneda acordada) */
 export function summarize(finance: Agreement | undefined, payments: Payment[]): PaymentSummary {
   const currency = finance?.currency ?? payments[0]?.currency ?? "UYU";
