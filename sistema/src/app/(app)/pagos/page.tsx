@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
-  ArrowLeft, Banknote, Calculator, ChevronDown, Copy, Download, FileText, FileUp, HardDriveUpload, History, Lock, MoreHorizontal, NotebookPen, Pencil, Plus, Search, Settings2, Trash2,
+  ArrowDown, ArrowLeft, ArrowUp, Banknote, Calculator, ChevronDown, Copy, Download, FileText, FileUp, HardDriveUpload, History, Lock, MoreHorizontal, NotebookPen, Pencil, Plus, Search, Settings2, Trash2,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -38,6 +38,12 @@ const KIND_FILTER = [{ value: "", label: "Todos los tipos" }].concat(
   Object.entries(BUDGET_KINDS).map(([value, k]) => ({ value, label: k.label })),
 );
 
+/** Por número, como números ("999" antes que "2094"); los que no tienen número van siempre al final */
+function byNumber(a: Budget, b: Budget, asc: boolean) {
+  if (!a.number !== !b.number) return a.number ? -1 : 1;
+  return (asc ? 1 : -1) * a.number.localeCompare(b.number, "es", { numeric: true }) || b.issued_on.localeCompare(a.issued_on);
+}
+
 /** Presupuestos: lista de todos los presupuestos del estudio y creador */
 export default function BudgetsPage() {
   const router = useRouter();
@@ -54,6 +60,7 @@ export default function BudgetsPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [kind, setKind] = useState("");
+  const [numberAsc, setNumberAsc] = useState(false);
   // Ventana de "+ Presupuesto": primero se elige el tipo; el manual se completa ahí mismo
   const [creating, setCreating] = useState<null | "choose" | "manual">(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -72,7 +79,7 @@ export default function BudgetsPage() {
     return <EmptyState icon={Lock} title="Sin permiso" description="Los presupuestos son solo para administradores." />;
   }
 
-  const all = budgets.data ?? [];
+  const all = [...(budgets.data ?? [])].sort((a, b) => byNumber(a, b, numberAsc));
   const rows = all.filter((b) => {
     const p = b.project_id ? projectById.get(b.project_id) : undefined;
     return (!status || b.status === status) && (!kind || b.kind === kind)
@@ -164,7 +171,16 @@ export default function BudgetsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>N.º</TableHead>
+                <TableHead aria-sort={numberAsc ? "ascending" : "descending"}>
+                  <button
+                    type="button"
+                    onClick={() => setNumberAsc((v) => !v)}
+                    title={numberAsc ? "Ordenar de mayor a menor" : "Ordenar de menor a mayor"}
+                    className="inline-flex items-center gap-1 rounded-sm outline-none hover:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    N.º {numberAsc ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
+                  </button>
+                </TableHead>
                 <TableHead className="hidden sm:table-cell">Padrón</TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead className="hidden md:table-cell">Servicio</TableHead>

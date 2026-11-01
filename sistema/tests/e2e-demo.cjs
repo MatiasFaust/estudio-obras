@@ -595,6 +595,15 @@ async function logout(page) {
     `duplicar: abre la copia sin número y sin los pagos (${copy.client} | "${copy.number}" | ${copy.resp})`);
   await openList();
   check((await page.$$('main tbody tr')).length === rowsBefore + 1, 'duplicar: la copia aparece en la tabla');
+  // La lista queda ordenada por número: el más alto arriba, los sin número al final; "N.º" invierte el orden
+  const listNumbers = () => page.$$eval('main tbody tr td:first-child a', (as) => as.map((a) => a.textContent.trim()));
+  const isSorted = (nums, dir) => nums.slice(0, -1).every((n, i, l) => i === 0 || dir * (Number(n) - Number(l[i - 1])) > 0) && nums.at(-1) === 'Sin número';
+  const numsDesc = await listNumbers();
+  check(numsDesc.length >= 4 && isSorted(numsDesc, -1), `lista ordenada por número, de mayor a menor (${numsDesc.join(', ')})`);
+  await page.click('th button[title^="Ordenar"]');
+  await sleep(300);
+  const numsAsc = await listNumbers();
+  check(numsAsc.length === numsDesc.length && isSorted(numsAsc, 1), `al tocar "N.º" se ordena de menor a mayor (${numsAsc.join(', ')})`);
   for (const r of await page.$$('main tbody tr')) {
     const t = await r.evaluate((e) => e.textContent);
     if (t.includes('Sin número') && t.includes('Cliente Manual Prueba')) {
