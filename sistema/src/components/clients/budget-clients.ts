@@ -3,8 +3,8 @@ import type { Budget, Client, ClientInput, Project } from "@/lib/types";
 
 // Los presupuestos guardan el nombre del cliente, no un vínculo con Clientes: acá se comparan
 // por nombre, sin importar mayúsculas, tildes ni espacios de más.
-const tidy = (name: string) => name.trim().replace(/\s+/g, " ");
-const nameKey = (name: string) => normalize(tidy(name));
+export const tidy = (name: string) => name.trim().replace(/\s+/g, " ");
+export const nameKey = (name: string) => normalize(tidy(name));
 
 /** Nombres de esta lista que todavía no están en Clientes (sin repetir; también mira los archivados) */
 export function missingClients(names: string[], clients: Client[]): string[] {

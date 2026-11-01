@@ -738,6 +738,59 @@ async function logout(page) {
   await page.setViewport({ width: 1440, height: 900 });
   await page.emulateMediaType('screen');
   check(!printView.aside && !printView.header && printView.table && printView.fits, `balance: al imprimir sale solo la tabla y entra en una hoja (${JSON.stringify(printView)})`);
+  // Obras desde los presupuestos y clientes: se arman solas, sin tocar lo que ya estaba.
+  // Dos presupuestos de prueba sobre obras que ya existen: uno aceptado con otro monto (no se puede vincular) y uno pendiente
+  const demoDb = () => page.evaluate(() => JSON.parse(localStorage.getItem('estudio-demo-db-v1')));
+  await page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem('estudio-demo-db-v1'));
+    const withFinance = db.projects.find((p) => p.padron && db.finances.some((f) => f.project_id === p.id && f.agreed_amount !== null));
+    const other = db.projects.find((p) => p.status !== 'archivada' && !db.finances.some((f) => f.project_id === p.id));
+    other.padron = '7002';
+    const base = db.budgets.find((b) => b.id === 'b1');
+    db.budgets.push(
+      { ...base, id: 'b-choca', number: '4001', project_id: null, padron: withFinance.padron, client_name: 'Cliente Choca', status: 'aceptado', price: 1 },
+      { ...base, id: 'b-suma', number: '4002', project_id: null, padron: other.padron, client_name: 'Cliente Suma', status: 'pendiente', price: 2 },
+    );
+    localStorage.setItem('estudio-demo-db-v1', JSON.stringify(db));
+  });
+  const before = await demoDb();
+  await page.goto(`${BASE}/obras`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('main [role=status] button', { timeout: 10000 });
+  await sleep(500);
+  check((await page.$eval('main [role=status]', (e) => e.textContent)).includes('obras para agregar'), 'obras: avisa que hay obras para agregar desde presupuestos y clientes');
+  check((await page.$$eval('main button', (bs) => bs.filter((b) => b.textContent.includes('Seleccionar')).length)) === 0, 'obras: los filtros dicen qué filtran, no "Seleccionar"');
+  await clickText(page, 'main [role=status] button', 'Revisar y agregar');
+  await page.waitForSelector('[role=dialog] tbody tr', { timeout: 10000 });
+  await sleep(400);
+  const props = await page.$$eval('[role=dialog] tbody tr', (rows) => rows.map((r) => ({ txt: r.textContent, on: r.querySelector('[role=checkbox]')?.getAttribute('aria-checked'), off: r.querySelector('[role=checkbox]')?.hasAttribute('data-disabled') })));
+  const propOf = (n) => props.find((p) => p.txt.includes(n));
+  check(propOf('3050')?.txt.includes('Obra Prueba') && propOf('3050')?.txt.includes('Ana Prueba') && propOf('3050')?.txt.includes('Padrón 1234') && propOf('3050')?.on === 'true', 'obras: se arma con los datos del presupuesto (nombre, cliente, padrón)');
+  check(propOf('4001')?.txt.includes('ya tiene otro monto acordado') && propOf('4001')?.off === true, 'obras: no vincula si le cambiaría el monto a una obra que ya existe');
+  check(propOf('4002')?.txt.includes('Ya existe') && propOf('4002')?.on === 'true', 'obras: si el padrón ya tiene obra, vincula en lugar de duplicar');
+  check(props.some((p) => p.txt.includes('Solo cliente')), 'obras: también propone a los clientes sin obra ni presupuestos');
+  await clickText(page, '[role=dialog] button', 'Crear');
+  await page.waitForFunction(() => !document.querySelector('[role=dialog]'), { timeout: 20000 }).catch(() => {});
+  await sleep(1000);
+  const after = await demoDb();
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const untouched = before.projects.every((p) => same(p, after.projects.find((x) => x.id === p.id)));
+  const financesKept = before.finances.every((f) => same(f, after.finances.find((x) => x.project_id === f.project_id)));
+  const clientsKept = before.clients.every((c) => same(c, after.clients.find((x) => x.id === c.id)));
+  const nothingLost = before.budgets.every((b) => after.budgets.some((x) => x.id === b.id)) && before.payments.every((p) => after.payments.some((x) => x.id === p.id));
+  check(untouched && financesKept && clientsKept && nothingLost, 'obras: no se borra nada y lo que ya estaba queda igual (obras, montos, clientes, presupuestos y pagos)');
+  const b3050 = after.budgets.find((b) => b.number === '3050');
+  const obra3050 = after.projects.find((p) => p.id === b3050.project_id);
+  const ana = after.clients.find((c) => c.name === 'Ana Prueba');
+  check(obra3050?.name === 'Obra Prueba' && obra3050.padron === '1234' && obra3050.address === 'Padrón 1234' && obra3050.locality === 'Paysandú' && obra3050.client_id === ana?.id
+    && obra3050.description === 'Regularización de vivienda' && obra3050.project_type === 'vivienda' && obra3050.status === 'anteproyecto', `obras: la obra nueva queda con todos sus datos (${JSON.stringify({ n: obra3050?.name, d: obra3050?.address, t: obra3050?.project_type })})`);
+  const b3001 = after.budgets.find((b) => b.number === '3001');
+  const pay3001 = after.payments.find((p) => p.concept === 'Seña del manual');
+  check(!!b3001.project_id && pay3001.project_id === b3001.project_id && pay3001.budget_id === null && after.projects.find((p) => p.id === b3001.project_id)?.status === 'en_construccion', 'obras: los pagos del presupuesto pasan a su obra');
+  check(after.budgets.find((b) => b.number === '4001').project_id === null && !!after.budgets.find((b) => b.number === '4002').project_id, 'obras: el que chocaba queda sin vincular y el otro, vinculado');
+  check(after.clients.filter((c) => c.name === 'Ana Prueba').length === 1, 'obras: no duplica clientes');
+  const obraRows = await page.$$eval('main tbody tr', (rows) => rows.filter((r) => r.checkVisibility()).map((r) => r.textContent));
+  check(obraRows.some((t) => t.includes('Obra Prueba')) && before.projects.filter((p) => p.status !== 'archivada').every((p) => obraRows.some((t) => t.includes(p.name))), `obras: aparecen las nuevas y siguen todas las de antes (${before.projects.length} → ${after.projects.length})`);
+  check(!(await page.$('main [role=status]')), 'obras: ya no queda nada para agregar');
   // La dirección vieja dentro de la obra lleva al editor nuevo
   await page.goto(`${BASE}/obras/p1/presupuestos/b1`, { waitUntil: 'networkidle2' });
   await page.waitForFunction(() => location.pathname === '/pagos/b1', { timeout: 10000 }).catch(() => {});

@@ -2,18 +2,20 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Building2, Plus, Search } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
+import { Building2, ListPlus, Plus, Search } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { proposeObras } from "@/components/budgets/obras-from-budgets";
+import { ObrasFromBudgetsDialog } from "@/components/budgets/obras-from-budgets-dialog";
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
 import { ProgressBar } from "@/components/common/progress-bar";
 import { SimpleSelect } from "@/components/common/simple-select";
 import { StatusBadge } from "@/components/common/status-badge";
 import { PROJECT_TYPES, SELECTABLE_STATUS, STATUS } from "@/lib/constants";
-import { useClients, useProfiles, useProjects, useSession } from "@/lib/data/hooks";
+import { useBudgets, useClients, useFinances, usePayments, useProfiles, useProjects, useSession } from "@/lib/data/hooks";
 import { formatDate, isOverdue, matches } from "@/lib/format";
 import { can } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -31,12 +33,26 @@ export default function ProjectsPage() {
   const [type, setType] = useState("");
   const [responsible, setResponsible] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const canPropose = can.viewFinances(profile) && can.manageProjects(profile);
+  const budgets = useBudgets(canPropose);
+  const finances = useFinances(canPropose);
+  const payments = usePayments(canPropose);
+  const [reviewing, setReviewing] = useState<number | null>(null);
 
   const clientName = useMemo(() => new Map((clients.data ?? []).map((c) => [c.id, c.name])), [clients.data]);
   const personName = useMemo(() => new Map((profiles.data ?? []).map((p) => [p.id, p.full_name])), [profiles.data]);
   const responsibleFilter = [{ value: "", label: "Todos los responsables" }].concat(
     (profiles.data ?? []).filter((p) => p.role !== "colaborador").map((p) => ({ value: p.id, label: p.full_name })),
   );
+
+  // Obras que faltan según los presupuestos y los clientes (cuando ya cargó todo, para no proponer de más)
+  const proposals = useMemo(
+    () => (canPropose && budgets.data && projects.data && clients.data && finances.data && payments.data && profiles.data
+      ? proposeObras({ budgets: budgets.data, projects: projects.data, clients: clients.data, finances: finances.data, payments: payments.data, profiles: profiles.data })
+      : []),
+    [canPropose, budgets.data, projects.data, clients.data, finances.data, payments.data, profiles.data],
+  );
+  const suggested = proposals.filter((p) => p.suggested).length;
 
   const list = (projects.data ?? []).filter(
     (p) =>
@@ -62,13 +78,21 @@ export default function ProjectsPage() {
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nombre, código, dirección, cliente…" className="pl-8" aria-label="Buscar obras" />
         </div>
-        <SimpleSelect value={status} onChange={setStatus} options={STATUS_FILTER} className="w-44" aria-label="Filtrar por estado" />
-        <SimpleSelect value={type} onChange={setType} options={TYPE_FILTER} className="w-40" aria-label="Filtrar por tipo" />
-        <SimpleSelect value={responsible} onChange={setResponsible} options={responsibleFilter} className="w-48" aria-label="Filtrar por responsable" />
+        <SimpleSelect value={status} onChange={setStatus} options={STATUS_FILTER} placeholder="Todos los estados" className="w-44" aria-label="Filtrar por estado" />
+        <SimpleSelect value={type} onChange={setType} options={TYPE_FILTER} placeholder="Todos los tipos" className="w-40" aria-label="Filtrar por tipo" />
+        <SimpleSelect value={responsible} onChange={setResponsible} options={responsibleFilter} placeholder="Todos los responsables" className="w-48" aria-label="Filtrar por responsable" />
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <Checkbox checked={showArchived} onCheckedChange={setShowArchived} /> Archivadas
         </label>
       </div>
+
+      {suggested > 0 && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 text-sm" role="status">
+          <span>{suggested === 1 ? "Hay 1 obra para agregar desde los presupuestos y clientes." : `Hay ${suggested} obras para agregar desde los presupuestos y clientes.`}</span>
+          <Button size="sm" variant="outline" onClick={() => setReviewing(Date.now())}><ListPlus /> Revisar y agregar</Button>
+        </div>
+      )}
+      {reviewing && <ObrasFromBudgetsDialog key={reviewing} proposals={proposals} onClose={() => setReviewing(null)} />}
 
       {projects.isLoading ? (
         <p className="py-8 text-sm text-muted-foreground">Cargando obras…</p>
