@@ -54,7 +54,8 @@ async function logout(page) {
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push('JS: ' + e.message));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+  // El servicio de direcciones responde 500 cuando un padrón no existe: el navegador lo anota, pero no es una falla
+  page.on('console', (m) => { if (m.type() === 'error' && !m.location().url?.includes('direcciones.ide.uy')) errors.push('console: ' + m.text()); });
   await page.setViewport({ width: 1440, height: 900 });
 
   // --- Sin sesión: redirige a login
@@ -791,6 +792,59 @@ async function logout(page) {
   const obraRows = await page.$$eval('main tbody tr', (rows) => rows.filter((r) => r.checkVisibility()).map((r) => r.textContent));
   check(obraRows.some((t) => t.includes('Obra Prueba')) && before.projects.filter((p) => p.status !== 'archivada').every((p) => obraRows.some((t) => t.includes(p.name))), `obras: aparecen las nuevas y siguen todas las de antes (${before.projects.length} → ${after.projects.length})`);
   check(!(await page.$('main [role=status]')), 'obras: ya no queda nada para agregar');
+  // Ubicar por padrón: se simula el servicio del Estado (la prueba no sale a internet)
+  await page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem('estudio-demo-db-v1'));
+    const obra = (padron) => db.projects.find((p) => p.padron === padron);
+    obra('7788').locality = 'Paysandú Chacras'; // El padrón aparece en otra localidad: queda como dudoso
+    const sinNada = db.projects.find((p) => p.lat === null && p.address === 'Sin dirección');
+    sinNada.address = 'Solís 1138'; // Sin padrón: se busca por la dirección
+    sinNada.name = 'Obra por dirección';
+    localStorage.setItem('estudio-demo-db-v1', JSON.stringify(db));
+  });
+  const ideCalls = [];
+  const fakeIde = (req) => {
+    const url = new URL(req.url());
+    if (url.hostname !== 'direcciones.ide.uy') return req.continue();
+    ideCalls.push(url.pathname + url.search);
+    const json = (status, body) => req.respond({ status, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(body) });
+    const hit = (address, lat, lng, type = 'MANZANAySOLAR', state = 1) => ({ type, address, localidad: 'PAYSANDU', lat, lng, state });
+    if (url.pathname.endsWith('/direcPadron')) {
+      const n = url.searchParams.get('padron');
+      if (n === '1234') return json(200, [hit('MANZANA 1 SOLAR 1, PAYSANDU, PAYSANDU', -32.31, -58.07)]);
+      if (n === '7788') return json(200, [hit('MANZANA 9 SOLAR 9, PAYSANDU, PAYSANDU', -32.33, -58.09)]);
+      return json(500, { status: 500 }); // Así responde el servicio cuando no encuentra el padrón
+    }
+    if (url.pathname.endsWith('/direcUnica') && url.searchParams.get('q').startsWith('Solís 1138')) return json(200, [hit('SOLIS 1138', -32.325, -58.085, 'CALLEyPORTAL')]);
+    return json(200, [hit('OTRA CALLE 543', -32.2, -58.2, 'CALLEyPORTAL', 2)]); // Aproximada: no se tiene que aceptar
+  };
+  await page.setRequestInterception(true);
+  page.on('request', fakeIde);
+  await page.goto(`${BASE}/obras`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('[data-notice="sin-ubicacion"] button', { timeout: 10000 });
+  const beforeLocate = await demoDb();
+  await page.click('[data-notice="sin-ubicacion"] button');
+  await page.waitForFunction(() => !document.querySelector('[role=dialog]')?.textContent.includes('Buscando'), { timeout: 20000 }).catch(() => {});
+  await sleep(300);
+  const locRows = await page.$$eval('[role=dialog] tbody tr', (rows) => rows.map((r) => ({ txt: r.textContent, on: r.querySelector('[role=checkbox]')?.getAttribute('aria-checked') })));
+  const locOf = (n) => locRows.find((r) => r.txt.includes(n));
+  check(locOf('1234')?.txt.includes('MANZANA 1 SOLAR 1') && locOf('1234')?.txt.includes('por padrón') && locOf('1234')?.on === 'true', 'ubicar: encuentra la obra por su padrón');
+  check(locOf('Obra por dirección')?.txt.includes('por dirección') && locOf('Obra por dirección')?.on === 'true', 'ubicar: si no hay padrón, busca por la dirección');
+  check(locOf('7788')?.txt.includes('puede ser otro con el mismo número') && locOf('7788')?.on === 'false', 'ubicar: las dudosas vienen sin tildar');
+  check(locOf('5678')?.txt.includes('No apareció'), 'ubicar: avisa si el padrón no aparece');
+  check(!locRows.some((r) => r.txt.includes('OTRA CALLE')), 'ubicar: no acepta direcciones aproximadas');
+  check(beforeLocate.projects.filter((p) => p.lat !== null).every((p) => !locRows.some((r) => r.txt.includes(p.name))), 'ubicar: no propone las obras que ya tienen ubicación');
+  await clickText(page, '[role=dialog] button', 'Guardar');
+  await page.waitForFunction(() => !document.querySelector('[role=dialog]'), { timeout: 15000 }).catch(() => {});
+  await sleep(800);
+  const afterLocate = await demoDb();
+  const coords = (padron) => { const p = afterLocate.projects.find((x) => x.padron === padron); return [p.lat, p.lng].join(); };
+  check(coords('1234') === '-32.31,-58.07' && afterLocate.projects.find((p) => p.name === 'Obra por dirección').lat === -32.325, 'ubicar: guarda las tildadas');
+  check(afterLocate.projects.find((p) => p.padron === '7788').lat === null && afterLocate.projects.find((p) => p.padron === '5678').lat === null, 'ubicar: las dudosas y las que no aparecieron quedan sin ubicación');
+  check(beforeLocate.projects.filter((p) => p.lat !== null).every((p) => same(p, afterLocate.projects.find((x) => x.id === p.id))), 'ubicar: las obras que ya tenían ubicación quedan igual');
+  check(ideCalls.every((c) => !/client|cliente|nombre/i.test(c)), 'ubicar: al servicio solo se le manda padrón y dirección');
+  page.off('request', fakeIde);
+  await page.setRequestInterception(false);
   // La dirección vieja dentro de la obra lleva al editor nuevo
   await page.goto(`${BASE}/obras/p1/presupuestos/b1`, { waitUntil: 'networkidle2' });
   await page.waitForFunction(() => location.pathname === '/pagos/b1', { timeout: 10000 }).catch(() => {});

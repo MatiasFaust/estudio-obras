@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Building2, ListPlus, Plus, Search } from "lucide-react";
+import { Building2, ListPlus, MapPin, Plus, Search } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { proposeObras } from "@/components/budgets/obras-from-budgets";
 import { ObrasFromBudgetsDialog } from "@/components/budgets/obras-from-budgets-dialog";
 import { EmptyState } from "@/components/common/empty-state";
+import { LocateObrasDialog } from "@/components/map/locate-obras-dialog";
 import { PageHeader } from "@/components/common/page-header";
 import { ProgressBar } from "@/components/common/progress-bar";
 import { SimpleSelect } from "@/components/common/simple-select";
@@ -38,6 +39,7 @@ export default function ProjectsPage() {
   const finances = useFinances(canPropose);
   const payments = usePayments(canPropose);
   const [reviewing, setReviewing] = useState<number | null>(null);
+  const [locating, setLocating] = useState<number | null>(null);
 
   const clientName = useMemo(() => new Map((clients.data ?? []).map((c) => [c.id, c.name])), [clients.data]);
   const personName = useMemo(() => new Map((profiles.data ?? []).map((p) => [p.id, p.full_name])), [profiles.data]);
@@ -53,6 +55,7 @@ export default function ProjectsPage() {
     [canPropose, budgets.data, projects.data, clients.data, finances.data, payments.data, profiles.data],
   );
   const suggested = proposals.filter((p) => p.suggested).length;
+  const unlocated = (projects.data ?? []).filter((p) => p.lat === null);
 
   const list = (projects.data ?? []).filter(
     (p) =>
@@ -93,6 +96,14 @@ export default function ProjectsPage() {
         </div>
       )}
       {reviewing && <ObrasFromBudgetsDialog key={reviewing} proposals={proposals} onClose={() => setReviewing(null)} />}
+
+      {can.manageProjects(profile) && unlocated.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 text-sm" data-notice="sin-ubicacion">
+          <span>{unlocated.length === 1 ? "1 obra no tiene ubicación en el mapa." : `${unlocated.length} obras no tienen ubicación en el mapa.`}</span>
+          <Button size="sm" variant="outline" onClick={() => setLocating(Date.now())}><MapPin /> Ubicar por padrón</Button>
+        </div>
+      )}
+      {locating && <LocateObrasDialog key={locating} projects={unlocated} onClose={() => setLocating(null)} />}
 
       {projects.isLoading ? (
         <p className="py-8 text-sm text-muted-foreground">Cargando obras…</p>
