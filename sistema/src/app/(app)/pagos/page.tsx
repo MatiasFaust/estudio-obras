@@ -78,8 +78,7 @@ export default function BudgetsPage() {
   const [busy, setBusy] = useState<string | null>(null);
   // Ventana de "Registrar pago" (la clave la reinicia cada vez que se abre)
   const [paying, setPaying] = useState<number | null>(null);
-  // La calculadora se abre sola al entrar a Presupuestos
-  const [calcOpen, setCalcOpen] = useState(true);
+  const [calcOpen, setCalcOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [deleting, setDeleting] = useState<Budget | null>(null);
   const deleteText = useDeleteBudgetText(deleting?.id);

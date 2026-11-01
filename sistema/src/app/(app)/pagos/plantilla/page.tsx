@@ -167,7 +167,7 @@ function TemplateForm({ initial }: { initial: BudgetSettings }) {
       <Card size="sm" id="calculadora">
         <CardHeader><CardTitle>Calculadora</CardTitle></CardHeader>
         <CardContent className="grid gap-4">
-          <p className="text-xs text-muted-foreground">Valores en pesos que usa la calculadora (se abre al entrar a Presupuestos). Lo que quede vacío no se calcula.</p>
+          <p className="text-xs text-muted-foreground">Valores en pesos que usa la calculadora (botón “Calculadora” en Presupuestos). Lo que quede vacío no se calcula.</p>
           <div className="grid gap-2">
             <div className="hidden gap-2 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[1fr_120px_110px_130px_32px]">
               <span>Tipo de trabajo</span><span>Honorarios por m²</span><span>Jornales por m²</span><span>Costo de obra por m²</span><span />

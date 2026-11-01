@@ -242,8 +242,6 @@ async function logout(page) {
     'la obra ya no tiene botón para registrar pagos (se registran desde Presupuestos)');
   // Registrar el pago desde Presupuestos (botón de arriba): se elige el presupuesto
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
-  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
-  await page.keyboard.press('Escape');
   await sleep(500);
   await clickText(page, 'main button', 'Registrar pago');
   await page.waitForSelector('#pay-concept', { timeout: 10000 });
@@ -294,8 +292,6 @@ async function logout(page) {
   check(page.url().includes('/pagos/b1') && b1Pct === '70', `el pago queda en el presupuesto: 33.800 de 48.000 = ${b1Pct} %`);
   // Historial de pagos: todos los cobros, quién pagó y cuánto (se entra desde Presupuestos)
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
-  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
-  await page.keyboard.press('Escape');
   await sleep(500);
   await clickText(page, 'main a', 'Historial de pagos');
   await page.waitForFunction(() => location.pathname === '/pagos/historial', { timeout: 10000 }).catch(() => {});
@@ -359,8 +355,6 @@ async function logout(page) {
   check(!!(await page.$('img[alt="Logo principal"]')), 'plantilla: se guarda el logo principal');
   // El PDF lleva el logo nuevo (la imagen lo hace más pesado)
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
-  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
-  await page.keyboard.press('Escape');
   await sleep(500);
   const logoPdfPromise = catchPdf();
   await page.click('[aria-label="Descargar PDF de 2095"]');
@@ -369,8 +363,6 @@ async function logout(page) {
   // Guardar en Drive: se simula la carpeta de Google Drive para escritorio (cuadro "Elegir carpeta")
   const openList = async () => {
     await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
-    await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
-    await page.keyboard.press('Escape');
     await sleep(500);
   };
   await page.evaluateOnNewDocument(() => {
@@ -416,9 +408,11 @@ async function logout(page) {
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
   await sleep(800);
   check((await page.$eval('main', (e) => e.textContent)).includes('2095'), 'menú Presupuestos: aparece el presupuesto recién creado');
-  // Calculadora: se abre sola. Reforma de 86 m² (valores de la demo: $ 1.200/m², 1,5 J/m², jornal $ 2.200)
+  // Calculadora: ya no se abre sola, se abre con su botón. Reforma de 86 m² (valores de la demo: $ 1.200/m², 1,5 J/m², jornal $ 2.200)
+  check(!(await page.$('#calc-area')), 'calculadora: no se abre sola al entrar a Presupuestos');
+  await clickText(page, 'main button', 'Calculadora');
   await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
-  check(!!(await page.$('#calc-area')), 'calculadora: se abre sola al entrar a Presupuestos');
+  check(!!(await page.$('#calc-area')), 'calculadora: se abre con su botón');
   await page.click('[role=dialog] [aria-label="Tipo de trabajo"]');
   await sleep(400);
   await clickText(page, '[role=option]', 'Reforma');
@@ -447,8 +441,6 @@ async function logout(page) {
   check(pre[0] === '103.200' && pre[1] === '129' && pre[2] === '283.800' && pre[3] === '27.900' && pre[4].includes('86 m²') && pre[4].includes('reforma'),
     `calculadora → presupuesto nuevo con precio, jornales, gastos y superficie (${pre.slice(0, 4).join(' | ')})`);
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
-  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
-  await page.keyboard.press('Escape');
   await sleep(500);
   // "+ Presupuesto" abre una ventana con las dos opciones
   await clickText(page, 'main button', 'Presupuesto');
@@ -493,8 +485,6 @@ async function logout(page) {
 
   // Presupuesto manual con costo fijo, sin obra: queda en la tabla, sin PDF
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
-  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
-  await page.keyboard.press('Escape');
   await sleep(500);
   await clickText(page, 'main button', 'Presupuesto');
   await sleep(500);
@@ -548,8 +538,6 @@ async function logout(page) {
   check(accepted.length >= 1 && accepted.every((t) => t.includes('Aceptado')), `filtro por estado: solo aceptados (${accepted.length})`);
   // Editar el manual
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
-  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
-  await page.keyboard.press('Escape');
   await sleep(500);
   await page.click('[aria-label="Editar 3001"]');
   await page.waitForSelector('#mb-price', { timeout: 10000 });
@@ -566,8 +554,6 @@ async function logout(page) {
   const manualPaid = await page.$eval('#pagos', (e) => ({ txt: e.textContent, pct: e.querySelector('[role=progressbar]')?.getAttribute('aria-valuenow') }));
   check(manualPaid.txt.includes('Seña del manual') && manualPaid.pct === '50', `presupuesto sin obra: pago registrado, 50 % cobrado (${manualPaid.pct})`);
   await page.goto(`${BASE}/pagos`, { waitUntil: 'networkidle2' });
-  await page.waitForSelector('#calc-area', { timeout: 10000 }).catch(() => {});
-  await page.keyboard.press('Escape');
   await sleep(500);
   const manualBar = await page.$eval('[aria-label^="Pagos de 3001"]', (a) => ({ href: a.getAttribute('href'), pct: a.querySelector('[role=progressbar]')?.getAttribute('aria-valuenow') })).catch(() => null);
   check(manualBar?.pct === '50' && manualBar?.href === `${manualPath}#pagos`, `tabla: barrita del presupuesto sin obra al 50 % (${JSON.stringify(manualBar)})`);
