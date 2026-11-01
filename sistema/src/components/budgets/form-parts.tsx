@@ -75,8 +75,13 @@ export function PaymentTermsEditor({
 }
 
 /** Nombres escritos en "Responsables" ("Ana, Juan y Pedro" → 3 nombres) */
-const responsibleNames = (text: string) => text.split(/\s*(?:,|\by\b)\s*/i).map((n) => n.trim()).filter(Boolean);
-const sameName = (a: string, b: string) => a.localeCompare(b, "es", { sensitivity: "base" }) === 0;
+export const responsibleNames = (text: string) => text.split(/\s*(?:,|\by\b)\s*/i).map((n) => n.trim()).filter(Boolean);
+export const sameName = (a: string, b: string) => a.localeCompare(b, "es", { sensitivity: "base" }) === 0;
+/** Marca o desmarca a una persona en el texto de responsables */
+export function toggleResponsible(value: string, person: string): string {
+  const names = responsibleNames(value);
+  return (names.some((n) => sameName(n, person)) ? names.filter((n) => !sameName(n, person)) : [...names, person]).join(", ");
+}
 
 /**
  * Responsables del presupuesto: botones con las personas de la plantilla (se marcan y desmarcan)
@@ -84,8 +89,6 @@ const sameName = (a: string, b: string) => a.localeCompare(b, "es", { sensitivit
  */
 export function ResponsibleInput({ id, value, onChange, options }: { id: string; value: string; onChange: (v: string) => void; options: string[] }) {
   const names = responsibleNames(value);
-  const toggle = (person: string) =>
-    onChange((names.some((n) => sameName(n, person)) ? names.filter((n) => !sameName(n, person)) : [...names, person]).join(", "));
   return (
     <div className="grid gap-1.5">
       {options.length > 0 && (
@@ -97,7 +100,7 @@ export function ResponsibleInput({ id, value, onChange, options }: { id: string;
                 key={person}
                 type="button"
                 aria-pressed={on}
-                onClick={() => toggle(person)}
+                onClick={() => onChange(toggleResponsible(value, person))}
                 className={cn(
                   "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   on ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground",

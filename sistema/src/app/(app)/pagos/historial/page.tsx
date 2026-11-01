@@ -12,9 +12,9 @@ import { SimpleSelect } from "@/components/common/simple-select";
 import { BUDGET_PAYING } from "@/components/budgets/budget-status";
 import { PAYMENT_METHODS } from "@/lib/constants";
 import { useBudgets, useClients, usePayments, useProfiles, useProjects, useSession } from "@/lib/data/hooks";
-import { formatDate, formatMoney, matches } from "@/lib/format";
+import { formatDate, formatMoney, matches, totalsByCurrency } from "@/lib/format";
 import { can } from "@/lib/permissions";
-import type { Budget, Currency, Payment } from "@/lib/types";
+import type { Budget, Payment } from "@/lib/types";
 
 const PERIODS = [
   { value: "", label: "Todas las fechas" },
@@ -75,10 +75,7 @@ export default function PaymentsHistoryPage() {
   const prefix = periodPrefix(period);
   const shown = rows.filter((r) => r.pay.paid_on.startsWith(prefix)
     && matches(query, r.client, r.budget?.number, r.budget?.service, r.project?.name, r.pay.concept, r.pay.receipt, r.pay.notes));
-  // Total cobrado en cada moneda (los pagos en dólares y en pesos no se mezclan)
-  const totals = (["UYU", "USD"] as Currency[])
-    .map((cur) => ({ cur, sum: shown.filter((r) => r.pay.currency === cur).reduce((a, r) => a + r.pay.amount, 0) }))
-    .filter((t) => t.sum > 0);
+  const total = totalsByCurrency(shown.map((r) => r.pay));
 
   return (
     <>
@@ -87,7 +84,7 @@ export default function PaymentsHistoryPage() {
       </Link>
       <PageHeader
         title="Historial de pagos"
-        description={`${shown.length} ${shown.length === 1 ? "pago" : "pagos"}${totals.length ? ` · Cobrado: ${totals.map((t) => formatMoney(t.sum, t.cur)).join(" + ")}` : ""}`}
+        description={`${shown.length} ${shown.length === 1 ? "pago" : "pagos"}${total ? ` · Cobrado: ${total}` : ""}`}
       />
 
       <div className="mb-3 flex flex-wrap items-center gap-2">

@@ -36,6 +36,15 @@ export function formatMoney(amount: number | null | undefined, currency: "UYU" |
   return `${currency === "USD" ? "US$" : "$"} ${n}`;
 }
 
+/** Suma por moneda, sin mezclar pesos y dólares: "$ 350.000,00 + US$ 31.000,00" ("" si no hay nada) */
+export function totalsByCurrency(items: { amount: number | null; currency: "UYU" | "USD" }[]): string {
+  return (["UYU", "USD"] as const)
+    .map((cur) => ({ cur, sum: items.reduce((a, i) => a + (i.currency === cur ? i.amount ?? 0 : 0), 0) }))
+    .filter((t) => t.sum > 0)
+    .map((t) => formatMoney(t.sum, t.cur))
+    .join(" + ");
+}
+
 /** Convierte un pago a la moneda acordada (cotización = pesos por dólar) */
 export function convertAmount(amount: number, from: "UYU" | "USD", to: "UYU" | "USD", rate: number | null): number | null {
   if (from === to) return amount;

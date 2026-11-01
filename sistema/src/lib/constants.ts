@@ -15,6 +15,8 @@ export const PAYMENT_METHODS: Record<PaymentMethod, string> = {
   otro: "Otro",
 };
 
+export const MONTHS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre"];
+
 /** Grupos de estado que distingue el mapa y el dashboard */
 export type StatusGroup = "planificacion" | "activa" | "pausada" | "finalizada" | "archivada";
 

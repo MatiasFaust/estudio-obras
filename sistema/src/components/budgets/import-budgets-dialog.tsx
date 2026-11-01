@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Field } from "@/components/common/field";
 import { SimpleSelect } from "@/components/common/simple-select";
-import { useAction, useRepo } from "@/lib/data/hooks";
+import { clientFromBudget, missingClients } from "@/components/clients/budget-clients";
+import { useAction, useClients, useRepo } from "@/lib/data/hooks";
 import { formatDate } from "@/lib/format";
 import type { Budget, BudgetInput, BudgetStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,7 @@ function toInput(d: ImportedBudget, status: BudgetStatus): BudgetInput {
 export function ImportBudgetsDialog({ open, onOpenChange, existing }: { open: boolean; onOpenChange: (o: boolean) => void; existing: Budget[] }) {
   const repo = useRepo();
   const { run, pending } = useAction();
+  const clients = useClients();
   const [rows, setRows] = useState<Row[]>([]);
   const [reading, setReading] = useState<{ done: number; total: number } | null>(null);
   const [status, setStatus] = useState<BudgetStatus>("enviado");
@@ -72,6 +74,7 @@ export function ImportBudgetsDialog({ open, onOpenChange, existing }: { open: bo
   const input = useRef<HTMLInputElement>(null);
 
   const chosen = rows.filter((r) => r.include && r.data && !r.done);
+  const newClients = missingClients(chosen.map((r) => r.data!.client_name), clients.data ?? []);
   const busy = !!reading || pending;
 
   async function addFiles(list: FileList | File[]) {
@@ -108,12 +111,18 @@ export function ImportBudgetsDialog({ open, onOpenChange, existing }: { open: bo
 
   async function create() {
     const list = chosen;
+    const budgetsText = list.length === 1 ? "1 presupuesto cargado" : `${list.length} presupuestos cargados`;
+    const clientsText = newClients.length === 0 ? "" : newClients.length === 1 ? " y 1 cliente nuevo" : ` y ${newClients.length} clientes nuevos`;
     const ok = await run(async () => {
+      // Cada cliente que todavía no está en Clientes se agrega junto con su presupuesto
+      const known = [...(clients.data ?? [])];
       for (const r of list) {
         await repo.createBudget(toInput(r.data!, status));
+        const [name] = missingClients([r.data!.client_name], known);
+        if (name) known.push(await repo.createClient(clientFromBudget(name)));
         setRows((rs) => rs.map((x) => (x.key === r.key ? { ...x, done: true, include: false } : x)));
       }
-    }, list.length === 1 ? "1 presupuesto cargado" : `${list.length} presupuestos cargados`);
+    }, `${budgetsText}${clientsText}`);
     if (ok) close(false);
   }
 
@@ -130,7 +139,7 @@ export function ImportBudgetsDialog({ open, onOpenChange, existing }: { open: bo
           <DialogTitle>Subir presupuestos en PDF</DialogTitle>
           <DialogDescription>
             Elegí los PDF de los presupuestos que ya tenés (podés marcar muchos juntos). El sistema los lee y los carga como si
-            los hubieras hecho acá. Los archivos no se suben: solo se guardan los datos.
+            los hubieras hecho acá, y agrega a Clientes los que falten. Los archivos no se suben: solo se guardan los datos.
           </DialogDescription>
         </DialogHeader>
 

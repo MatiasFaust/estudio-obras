@@ -652,6 +652,106 @@ async function logout(page) {
   check(again.length === 1 && again[0].includes('Ya está cargado') && createBtn === true, 'subir PDF: avisa si ya está cargado y no lo repite');
   await page.keyboard.press('Escape');
   await sleep(400);
+  // Clientes: los de los PDF quedan en Clientes; los que faltan se agregan con un botón, sin tocar los que ya estaban
+  const clientNames = () => page.$$eval('main tbody tr td:first-child', (tds) => tds.filter((td) => td.checkVisibility()).map((td) => td.textContent.trim()));
+  await page.goto(`${BASE}/clientes`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('main tbody tr', { timeout: 10000 });
+  await sleep(500);
+  const clientsBefore = await clientNames();
+  check(clientsBefore.filter((n) => n === 'Ana Prueba').length === 1 && clientsBefore.includes('Familia Ficticia Gómez'), 'subir PDF: sus clientes quedan en Clientes, una sola vez');
+  check(clientsBefore.filter((n) => n === 'Familia Ejemplo Acosta').length === 1, 'clientes: no se duplica un cliente que ya estaba');
+  const clientNotice = await page.$eval('main [role=status]', (e) => e.textContent).catch(() => '');
+  check(clientNotice.includes('todavía no'), `clientes: avisa si hay clientes de presupuestos que faltan (${clientNotice})`);
+  await clickText(page, 'main [role=status] button', 'Agregar');
+  await sleep(400);
+  const addText = await page.$eval('[role=alertdialog]', (e) => e.textContent);
+  check(addText.includes('Cliente Manual Prueba') && addText.includes('no se borra'), 'clientes: antes de agregar muestra los nombres y aclara que no se borra nada');
+  await clickText(page, '[role=alertdialog] button', 'Agregar');
+  await sleep(1000);
+  const clientsAfter = await clientNames();
+  check(clientsBefore.every((n) => clientsAfter.includes(n)) && clientsAfter.includes('Cliente Manual Prueba') && !(await page.$('main [role=status]')),
+    `clientes: se agregan los que faltan y siguen todos los de antes (${clientsBefore.length} → ${clientsAfter.length})`);
+  const anaHref = await page.$$eval('main tbody a', (as) => as.find((a) => a.checkVisibility() && a.textContent.includes('Ana Prueba'))?.getAttribute('href'));
+  await page.goto(`${BASE}${anaHref}`, { waitUntil: 'networkidle2' });
+  await sleep(800);
+  const anaTxt = await page.$eval('main', (e) => e.innerText);
+  check(anaTxt.includes('Presupuestos (1)') && anaTxt.includes('3050'), 'clientes: cada cliente muestra sus presupuestos');
+  // Responsables desde la lista: se marcan varios con la pestaña y se guardan al cerrarla
+  const rowOf = (n) => page.$$eval('main tbody tr', (rows, num) => rows.map((r) => r.innerText).find((t) => t.startsWith(num)) ?? '', n);
+  await openList();
+  await page.click('[aria-label="Cambiar responsables de 3050"]');
+  await sleep(300);
+  await clickText(page, '[role=menuitemcheckbox]', 'Laura Méndez');
+  await clickText(page, '[role=menuitemcheckbox]', 'Diego Suárez');
+  await page.keyboard.press('Escape');
+  await sleep(800);
+  await openList();
+  const respTwo = await rowOf('3050');
+  check(respTwo.includes('Laura Méndez') && respTwo.includes('Diego Suárez'), 'responsables desde la lista: se marcan varios y quedan guardados');
+  await page.click('[aria-label="Cambiar responsables de 3050"]');
+  await sleep(300);
+  await clickText(page, '[role=menuitemcheckbox]', 'Laura Méndez');
+  await page.keyboard.press('Escape');
+  await sleep(800);
+  await openList();
+  const respOne = await rowOf('3050');
+  check(!respOne.includes('Laura Méndez') && respOne.includes('Diego Suárez'), 'responsables desde la lista: también se pueden sacar');
+  // Filtros por año, mes y día
+  const pick = async (label, option) => {
+    await page.click(`[aria-label="${label}"]`);
+    await sleep(300);
+    // Exacto y visible: las listas ya cerradas siguen en la página ("5" no tiene que agarrar "2025")
+    for (const h of await page.$$('[role=option]')) {
+      const o = await h.evaluate((e) => ({ text: e.textContent.trim(), on: e.checkVisibility() }));
+      if (o.on && o.text === option) { await h.click(); break; }
+    }
+    await sleep(300);
+  };
+  await pick('Filtrar por año', '2025');
+  const byYear = await listNumbers();
+  await pick('Filtrar por mes', 'Mayo');
+  await pick('Filtrar por día', '5');
+  const byDay = await listNumbers();
+  await pick('Filtrar por mes', 'Marzo');
+  const noneTxt = await page.$eval('main', (e) => e.textContent);
+  check(byYear.join() === '3050' && byDay.join() === '3050' && (await listNumbers()).length === 0 && noneTxt.includes('Ningún presupuesto coincide'),
+    `filtros por año, mes y día (${byYear.join()} | ${byDay.join()})`);
+  // Balance: presupuestos hechos y cuánto se ganó en cada mes
+  await openList();
+  await clickText(page, 'main a', 'Balance');
+  await page.waitForSelector('main tr[data-month="total"]', { timeout: 10000 });
+  await sleep(500);
+  const balance = () => page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem('estudio-demo-db-v1'));
+    const now = new Date();
+    const y = String(now.getFullYear());
+    const m = `${y}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const cells = (key) => [...(document.querySelector(`main tr[data-month="${key}"]`)?.cells ?? [])].map((c) => c.textContent.trim());
+    return {
+      months: document.querySelectorAll('main tbody tr[data-month]').length, month: cells(m), total: cells('total'),
+      made: db.budgets.filter((b) => b.issued_on.startsWith(m)).length, madeYear: db.budgets.filter((b) => b.issued_on.startsWith(y)).length,
+      usd: db.payments.filter((p) => p.paid_on.startsWith(m) && p.currency === 'USD').reduce((a, p) => a + p.amount, 0),
+    };
+  });
+  const bal = await balance();
+  const usdText = `US$ ${new Intl.NumberFormat('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(bal.usd)}`;
+  check(bal.months === 12 && bal.month[1] === String(bal.made) && bal.total[1] === String(bal.madeYear), `balance: presupuestos hechos en el mes y en el año (${bal.month[1]} y ${bal.total[1]})`);
+  check(bal.usd > 0 && bal.month[4].includes(usdText), `balance: lo cobrado en el mes (${bal.month[4]})`);
+  await pick('Año del balance', '2025');
+  const bal2025 = await balance();
+  check(bal2025.total[1] === '1' && (await page.$eval('main h1', (e) => e.textContent)).includes('2025'), 'balance: se puede cambiar el año');
+  // Al imprimir solo sale el balance, sin el menú ni los botones
+  await pick('Año del balance', String(new Date().getFullYear()));
+  await page.emulateMediaType('print');
+  await page.setViewport({ width: 720, height: 1000 }); // Ancho útil de una hoja A4
+  const printView = await page.evaluate(() => {
+    const shown = (sel) => { const e = document.querySelector(sel); return !!e && getComputedStyle(e).display !== 'none'; };
+    const box = document.querySelector('main table').parentElement;
+    return { aside: shown('aside'), header: shown('header'), table: shown('main table'), fits: box.scrollWidth <= box.clientWidth };
+  });
+  await page.setViewport({ width: 1440, height: 900 });
+  await page.emulateMediaType('screen');
+  check(!printView.aside && !printView.header && printView.table && printView.fits, `balance: al imprimir sale solo la tabla y entra en una hoja (${JSON.stringify(printView)})`);
   // La dirección vieja dentro de la obra lleva al editor nuevo
   await page.goto(`${BASE}/obras/p1/presupuestos/b1`, { waitUntil: 'networkidle2' });
   await page.waitForFunction(() => location.pathname === '/pagos/b1', { timeout: 10000 }).catch(() => {});

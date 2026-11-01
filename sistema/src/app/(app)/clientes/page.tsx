@@ -2,25 +2,38 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Building, Plus, Search, User, Users } from "lucide-react";
+import { Building, Plus, Search, User, UserPlus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { budgetsOfClient, clientFromBudget, missingClients } from "@/components/clients/budget-clients";
 import { ClientDialog } from "@/components/clients/client-dialog";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
-import { useClients, useProjects, useSession } from "@/lib/data/hooks";
+import { useAction, useBudgets, useClients, useProjects, useRepo, useSession } from "@/lib/data/hooks";
 import { matches } from "@/lib/format";
 import { can } from "@/lib/permissions";
 
 export default function ClientsPage() {
   const { profile } = useSession();
+  const repo = useRepo();
+  const { run } = useAction();
   const clients = useClients();
   const projects = useProjects();
+  const seesBudgets = can.viewFinances(profile);
+  const budgets = useBudgets(seesBudgets);
   const [query, setQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState<number | null>(null);
+  const [adding, setAdding] = useState(false);
+
+  // Clientes de los presupuestos que todavía no están acá (por ejemplo, los de los PDF ya subidos)
+  const missing = useMemo(
+    () => (clients.data && budgets.data && can.manageClients(profile) ? missingClients(budgets.data.map((b) => b.client_name), clients.data) : []),
+    [clients.data, budgets.data, profile],
+  );
 
   const projectCount = useMemo(() => {
     const m = new Map<string, number>();
@@ -52,6 +65,13 @@ export default function ClientsPage() {
         </label>
       </div>
 
+      {missing.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 text-sm" role="status">
+          <span>{missing.length === 1 ? "1 cliente de los presupuestos todavía no está acá." : `${missing.length} clientes de los presupuestos todavía no están acá.`}</span>
+          <Button size="sm" variant="outline" onClick={() => setAdding(true)}><UserPlus /> {missing.length === 1 ? "Agregarlo" : "Agregarlos"}</Button>
+        </div>
+      )}
+
       {clients.isLoading ? (
         <p className="py-8 text-sm text-muted-foreground">Cargando clientes…</p>
       ) : list.length === 0 ? (
@@ -66,6 +86,7 @@ export default function ClientsPage() {
                 <TableHead>Contacto</TableHead>
                 <TableHead className="hidden lg:table-cell">Dirección</TableHead>
                 <TableHead className="text-right">Obras</TableHead>
+                {seesBudgets && <TableHead className="text-right">Presupuestos</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -85,6 +106,7 @@ export default function ClientsPage() {
                   </TableCell>
                   <TableCell className="hidden max-w-60 truncate text-muted-foreground lg:table-cell">{c.address ?? "—"}</TableCell>
                   <TableCell className="text-right tabular-nums">{projectCount.get(c.id) ?? 0}</TableCell>
+                  {seesBudgets && <TableCell className="text-right tabular-nums">{budgetsOfClient(c, budgets.data ?? [], projects.data ?? []).length}</TableCell>}
                 </TableRow>
               ))}
             </TableBody>
@@ -93,6 +115,23 @@ export default function ClientsPage() {
       )}
 
       {creating && <ClientDialog key={creating} open onOpenChange={(o) => !o && setCreating(null)} />}
+
+      <ConfirmDialog
+        open={adding}
+        onOpenChange={setAdding}
+        title="¿Agregar estos clientes?"
+        description={
+          <>
+            Solo se agregan: no se borra ni se cambia nada de lo que ya está cargado. Después podés completar sus datos.
+            <span className="mt-2 block max-h-48 overflow-y-auto font-medium text-foreground">{missing.join(", ")}</span>
+          </>
+        }
+        confirmLabel="Agregar"
+        destructive={false}
+        onConfirm={() => run(async () => {
+          for (const name of missing) await repo.createClient(clientFromBudget(name));
+        }, missing.length === 1 ? "1 cliente agregado" : `${missing.length} clientes agregados`)}
+      />
     </>
   );
 }

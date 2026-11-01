@@ -82,7 +82,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         {repo.mode === "demo" && (
-          <div className="flex items-center justify-center gap-2 bg-amber-500/15 px-3 py-1 text-center text-xs text-amber-900 dark:text-amber-200">
+          <div className="flex items-center justify-center gap-2 bg-amber-500/15 px-3 py-1 text-center text-xs text-amber-900 dark:text-amber-200 print:hidden">
             <FlaskConical className="size-3.5 shrink-0" />
             Modo demostración: datos ficticios guardados solo en este navegador.
           </div>

@@ -6,13 +6,16 @@ import { useState } from "react";
 import { Archive, ArchiveRestore, ArrowLeft, Building2, Mail, MapPin, Pencil, Phone, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BudgetStatusBadge } from "@/components/budgets/budget-status";
+import { money } from "@/components/budgets/budget-text";
+import { budgetsOfClient } from "@/components/clients/budget-clients";
 import { ClientDialog } from "@/components/clients/client-dialog";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
 import { ProgressBar } from "@/components/common/progress-bar";
 import { StatusBadge } from "@/components/common/status-badge";
-import { useAction, useClients, useProjects, useRepo, useSession } from "@/lib/data/hooks";
+import { useAction, useBudgets, useClients, useProjects, useRepo, useSession } from "@/lib/data/hooks";
 import { formatDate } from "@/lib/format";
 import { can } from "@/lib/permissions";
 
@@ -24,11 +27,14 @@ export default function ClientDetailPage() {
   const { run } = useAction();
   const clients = useClients();
   const projects = useProjects();
+  const seesBudgets = can.viewFinances(profile);
+  const budgets = useBudgets(seesBudgets);
   const [editing, setEditing] = useState<number | null>(null);
   const [confirm, setConfirm] = useState<"archive" | "delete" | null>(null);
 
   const client = clients.data?.find((c) => c.id === id);
   const own = (projects.data ?? []).filter((p) => p.client_id === id);
+  const ownBudgets = client ? budgetsOfClient(client, budgets.data ?? [], projects.data ?? []) : [];
 
   if (clients.isLoading) return <p className="text-sm text-muted-foreground">Cargando…</p>;
   if (!client) {
@@ -85,29 +91,57 @@ export default function ClientDetailPage() {
           </Card>
         </div>
 
-        <Card size="sm">
-          <CardHeader><CardTitle>Obras ({own.length})</CardTitle></CardHeader>
-          <CardContent>
-            {own.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Este cliente todavía no tiene obras.</p>
-            ) : (
-              <ul className="divide-y">
-                {own.map((p) => (
-                  <li key={p.id}>
-                    <Link href={`/obras/${p.id}`} className="grid gap-1.5 py-2.5 hover:bg-muted/40 sm:grid-cols-[1fr_auto_140px] sm:items-center sm:gap-4">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{p.name}</div>
-                        <div className="text-xs text-muted-foreground">{p.code} · {p.address} · fin {formatDate(p.due_date)}</div>
-                      </div>
-                      <StatusBadge status={p.status} />
-                      <ProgressBar value={p.progress} />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+        <div className="grid content-start gap-4">
+          <Card size="sm">
+            <CardHeader><CardTitle>Obras ({own.length})</CardTitle></CardHeader>
+            <CardContent>
+              {own.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Este cliente todavía no tiene obras.</p>
+              ) : (
+                <ul className="divide-y">
+                  {own.map((p) => (
+                    <li key={p.id}>
+                      <Link href={`/obras/${p.id}`} className="grid gap-1.5 py-2.5 hover:bg-muted/40 sm:grid-cols-[1fr_auto_140px] sm:items-center sm:gap-4">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">{p.name}</div>
+                          <div className="text-xs text-muted-foreground">{p.code} · {p.address} · fin {formatDate(p.due_date)}</div>
+                        </div>
+                        <StatusBadge status={p.status} />
+                        <ProgressBar value={p.progress} />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          {seesBudgets && (
+            <Card size="sm">
+              <CardHeader><CardTitle>Presupuestos ({ownBudgets.length})</CardTitle></CardHeader>
+              <CardContent>
+                {ownBudgets.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Este cliente todavía no tiene presupuestos.</p>
+                ) : (
+                  <ul className="divide-y">
+                    {ownBudgets.map((b) => (
+                      <li key={b.id}>
+                        <Link href={`/pagos/${b.id}`} className="grid gap-1.5 py-2.5 hover:bg-muted/40 sm:grid-cols-[1fr_auto_110px] sm:items-center sm:gap-4">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">{b.number || "Sin número"}</div>
+                            <div className="truncate text-xs text-muted-foreground">{formatDate(b.issued_on)}{b.service ? ` · ${b.service}` : ""}</div>
+                          </div>
+                          <BudgetStatusBadge status={b.status} />
+                          <div className="text-sm tabular-nums sm:text-right">{b.price !== null ? money(b.price, b.currency) : "—"}</div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
 
       {editing && <ClientDialog key={editing} open onOpenChange={(o) => !o && setEditing(null)} client={client} />}

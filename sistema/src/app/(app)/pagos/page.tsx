@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
-  ArrowDown, ArrowLeft, ArrowUp, Banknote, Calculator, ChevronDown, Copy, Download, FileText, FileUp, HardDriveUpload, History, Lock, MoreHorizontal, NotebookPen, Pencil, Plus, Search, Settings2, Trash2,
+  ArrowDown, ArrowLeft, ArrowUp, Banknote, Calculator, ChevronDown, Copy, Download, FileText, FileUp, HardDriveUpload, History, Lock, MoreHorizontal, NotebookPen, Pencil, Plus, Scale, Search, Settings2, Trash2,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -21,6 +21,7 @@ import { SimpleSelect } from "@/components/common/simple-select";
 import { useDeleteBudgetText } from "@/components/budgets/budget-payments";
 import { budgetFileName, budgetPdfBlob, downloadBudgetPdf } from "@/components/budgets/budget-pdf";
 import { useSaveToDrive } from "@/components/budgets/drive-save";
+import { responsibleNames, sameName, toggleResponsible } from "@/components/budgets/form-parts";
 import { BUDGET_KINDS, BUDGET_STATUS, BUDGET_STATUS_OPTIONS, BudgetStatusBadge } from "@/components/budgets/budget-status";
 import { CalculatorDialog } from "@/components/budgets/calculator-dialog";
 import { budgetCopy, money } from "@/components/budgets/budget-text";
@@ -28,6 +29,7 @@ import { ImportBudgetsDialog } from "@/components/budgets/import-budgets-dialog"
 import { ManualBudgetForm } from "@/components/budgets/manual-budget-form";
 import { budgetPaymentTarget, PaymentDialog, type PaymentChoice } from "@/components/payments/payment-dialogs";
 import { budgetPayments } from "@/components/payments/summary";
+import { MONTHS } from "@/lib/constants";
 import { useAction, useBudgets, useBudgetSettings, useClients, useFinances, usePayments, useProjects, useRepo, useSession } from "@/lib/data/hooks";
 import { formatDate, formatMoney, matches } from "@/lib/format";
 import { can } from "@/lib/permissions";
@@ -36,6 +38,12 @@ import type { Budget, BudgetStatus } from "@/lib/types";
 const STATUS_FILTER = [{ value: "", label: "Todos los estados" }].concat(BUDGET_STATUS_OPTIONS);
 const KIND_FILTER = [{ value: "", label: "Todos los tipos" }].concat(
   Object.entries(BUDGET_KINDS).map(([value, k]) => ({ value, label: k.label })),
+);
+const MONTH_FILTER = [{ value: "", label: "Todos los meses" }].concat(
+  MONTHS.map((label, i) => ({ value: String(i + 1).padStart(2, "0"), label })),
+);
+const DAY_FILTER = [{ value: "", label: "Todos los días" }].concat(
+  Array.from({ length: 31 }, (_, i) => ({ value: String(i + 1).padStart(2, "0"), label: String(i + 1) })),
 );
 
 /** Por número, como números ("999" antes que "2094"); los que no tienen número van siempre al final */
@@ -61,6 +69,10 @@ export default function BudgetsPage() {
   const [status, setStatus] = useState("");
   const [kind, setKind] = useState("");
   const [numberAsc, setNumberAsc] = useState(false);
+  // Filtros por fecha del presupuesto
+  const [year, setYear] = useState("");
+  const [month, setMonth] = useState("");
+  const [day, setDay] = useState("");
   // Ventana de "+ Presupuesto": primero se elige el tipo; el manual se completa ahí mismo
   const [creating, setCreating] = useState<null | "choose" | "manual">(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -80,9 +92,14 @@ export default function BudgetsPage() {
   }
 
   const all = [...(budgets.data ?? [])].sort((a, b) => byNumber(a, b, numberAsc));
+  const yearFilter = [{ value: "", label: "Todos los años" }].concat(
+    [...new Set(all.map((b) => b.issued_on.slice(0, 4)))].sort().reverse().map((y) => ({ value: y, label: y })),
+  );
   const rows = all.filter((b) => {
     const p = b.project_id ? projectById.get(b.project_id) : undefined;
+    const [y, m, d] = b.issued_on.split("-");
     return (!status || b.status === status) && (!kind || b.kind === kind)
+      && (!year || y === year) && (!month || m === month) && (!day || d === day)
       && matches(query, b.number, b.client_name, b.padron, b.service, b.address, b.responsible, p?.name, p?.code);
   });
 
@@ -143,6 +160,7 @@ export default function BudgetsPage() {
             <Button variant="outline" onClick={() => setCalcOpen(true)}><Calculator /> Calculadora</Button>
             <Link href="/pagos/plantilla" className={buttonVariants({ variant: "outline" })}><Settings2 /> Plantilla</Link>
             <Link href="/pagos/historial" className={buttonVariants({ variant: "outline" })}><History /> Historial de pagos</Link>
+            <Link href="/pagos/balance" className={buttonVariants({ variant: "outline" })}><Scale /> Balance</Link>
             <Button variant="outline" disabled={!paymentChoices.length} onClick={() => setPaying(Date.now())}><Banknote /> Registrar pago</Button>
             <Button onClick={() => setCreating("choose")}><Plus /> Presupuesto</Button>
           </>
@@ -156,6 +174,9 @@ export default function BudgetsPage() {
         </div>
         <SimpleSelect value={status} onChange={setStatus} options={STATUS_FILTER} placeholder="Todos los estados" className="w-44" aria-label="Filtrar por estado" />
         <SimpleSelect value={kind} onChange={setKind} options={KIND_FILTER} placeholder="Todos los tipos" className="w-52" aria-label="Filtrar por tipo" />
+        <SimpleSelect value={year} onChange={setYear} options={yearFilter} placeholder="Todos los años" className="w-36" aria-label="Filtrar por año" />
+        <SimpleSelect value={month} onChange={setMonth} options={MONTH_FILTER} placeholder="Todos los meses" className="w-38" aria-label="Filtrar por mes" />
+        <SimpleSelect value={day} onChange={setDay} options={DAY_FILTER} placeholder="Todos los días" className="w-34" aria-label="Filtrar por día" />
       </div>
 
       {budgets.isLoading || projects.isLoading || finances.isLoading || payments.isLoading ? (
@@ -186,7 +207,7 @@ export default function BudgetsPage() {
                 <TableHead className="hidden md:table-cell">Servicio</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="hidden w-28 sm:table-cell">Avance</TableHead>
-                <TableHead className="hidden lg:table-cell">Responsables</TableHead>
+                <TableHead className="hidden sm:table-cell">Responsables</TableHead>
                 <TableHead className="text-right">Honorarios</TableHead>
                 <TableHead className="w-28" />
               </TableRow>
@@ -200,13 +221,13 @@ export default function BudgetsPage() {
                     <span className="block text-xs text-muted-foreground">{formatDate(b.issued_on)}</span>
                   </TableCell>
                   <TableCell className="hidden tabular-nums sm:table-cell">{b.padron || "—"}</TableCell>
-                  <TableCell className="max-w-44">
+                  <TableCell className="max-w-40">
                     <span className="block truncate">{b.client_name || "—"}</span>
                     {b.project_id && projectById.get(b.project_id) && (
                       <span className="block truncate text-xs text-muted-foreground">{projectById.get(b.project_id)!.name}</span>
                     )}
                   </TableCell>
-                  <TableCell className="hidden max-w-32 truncate text-muted-foreground md:table-cell" title={b.service || undefined}>{b.service || "—"}</TableCell>
+                  <TableCell className="hidden max-w-28 truncate text-muted-foreground md:table-cell" title={b.service || undefined}>{b.service || "—"}</TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger
@@ -229,7 +250,9 @@ export default function BudgetsPage() {
                   <TableCell className="hidden sm:table-cell">
                     <PaymentProgress budget={b} percent={paidPercent(b)} />
                   </TableCell>
-                  <TableCell className="hidden max-w-32 truncate text-muted-foreground lg:table-cell" title={b.responsible || undefined}>{b.responsible || "—"}</TableCell>
+                  <TableCell className="hidden sm:table-cell">
+                    <ResponsibleCell budget={b} options={settings.data?.responsibles ?? []} />
+                  </TableCell>
                   <TableCell className="text-right whitespace-nowrap tabular-nums">{b.price !== null ? money(b.price, b.currency) : "—"}</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-0.5">
@@ -345,6 +368,50 @@ export default function BudgetsPage() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Responsables desde la lista: pestaña para marcar quién se encarga (se pueden marcar varios) */
+function ResponsibleCell({ budget: b, options }: { budget: Budget; options: string[] }) {
+  const repo = useRepo();
+  const { run } = useAction();
+  // Lo marcado se guarda al cerrar la pestaña: así se marcan varios de una, con un solo guardado
+  const [marked, setMarked] = useState<string | null>(null);
+  const value = marked ?? b.responsible;
+  const names = responsibleNames(value);
+  // También los nombres escritos a mano en el presupuesto, para poder sacarlos
+  const people = [...options, ...names.filter((n) => !options.some((o) => sameName(o, n)))];
+
+  async function saveOnClose(open: boolean) {
+    if (open || marked === null) return;
+    if (marked !== b.responsible) await run(() => repo.updateBudget(b.id, { responsible: marked }));
+    setMarked(null);
+  }
+
+  return (
+    <DropdownMenu onOpenChange={saveOnClose}>
+      <DropdownMenuTrigger
+        render={
+          <button type="button" className="inline-flex items-center gap-1 rounded-sm text-left text-xs outline-none hover:opacity-70 focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Cambiar responsables de ${b.number || "presupuesto"}`}>
+            {names.length ? (
+              <span className="grid">{names.map((n) => <span key={n} className="whitespace-nowrap">{n}</span>)}</span>
+            ) : (
+              <span className="text-muted-foreground">Elegir</span>
+            )}
+            <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+          </button>
+        }
+      />
+      <DropdownMenuContent align="start" className="w-52">
+        {people.length === 0 ? (
+          <p className="px-1.5 py-1 text-xs text-muted-foreground">Cargá las personas en Plantilla → Responsables.</p>
+        ) : people.map((person) => (
+          <DropdownMenuCheckboxItem key={person} checked={names.some((n) => sameName(n, person))} onCheckedChange={() => setMarked(toggleResponsible(value, person))}>
+            {person}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
