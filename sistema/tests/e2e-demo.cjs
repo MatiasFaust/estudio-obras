@@ -856,6 +856,20 @@ async function logout(page) {
   await sleep(1000);
   const devTxt = await page.$eval('main', (e) => e.textContent);
   check(devTxt.includes('Deben alquiler') && devTxt.includes('Casa Ombú (demo)'), 'desarrollo: panel con alquileres atrasados');
+  // Lo que se gana por mes: la suma de la columna Alquiler de los contratos vigentes, igual en las tres pantallas
+  const incomeText = () => page.$$eval('[data-monthly-income]', (els) => els.find((e) => e.checkVisibility())?.textContent.trim() ?? '');
+  const incomePanel = await incomeText();
+  await page.goto(`${BASE}/desarrollo/cobros`, { waitUntil: 'networkidle2' });
+  await sleep(800);
+  const rents = await page.$$eval('main tbody tr td:nth-child(2)', (tds) => tds.map((td) => td.textContent.trim()));
+  const sumOf = (prefix) => rents.filter((r) => r.startsWith(`${prefix} `)).reduce((a, r) => a + Number(r.slice(prefix.length + 1).replace(/\./g, '').replace(',', '.')), 0);
+  const fmtMoney = (n) => new Intl.NumberFormat('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  const incomeCobros = await incomeText();
+  check(rents.length > 0 && incomeCobros.includes(`${rents.length === 1 ? '1 contrato vigente' : `${rents.length} contratos vigentes`}`) && (sumOf('$') === 0 || incomeCobros.includes(`$ ${fmtMoney(sumOf('$'))}`)) && (sumOf('US$') === 0 || incomeCobros.includes(`US$ ${fmtMoney(sumOf('US$'))}`)),
+    `desarrollo: se gana por mes = suma de los alquileres (${incomeCobros})`);
+  await page.goto(`${BASE}/desarrollo/propiedades`, { waitUntil: 'networkidle2' });
+  await sleep(800);
+  check(incomePanel === incomeCobros && (await incomeText()) === incomeCobros, 'desarrollo: el total se ve igual en el panel, en cobros y en propiedades');
   await page.goto(`${BASE}/desarrollo/mapa`, { waitUntil: 'networkidle2' });
   await sleep(2000);
   pins = (await page.$$('.leaflet-marker-icon')).length;

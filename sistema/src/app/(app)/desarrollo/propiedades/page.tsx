@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
 import { SimpleSelect } from "@/components/common/simple-select";
 import { PropertyDialog } from "@/components/dev/dialogs";
+import { MonthlyIncome } from "@/components/dev/monthly-income";
 import { PropertyStatusBadge } from "@/components/dev/property-status";
 import { PROPERTY_KINDS, PROPERTY_STATUS, PROPERTY_STATUS_ORDER } from "@/lib/constants";
 import { useDevLeases, useDevPayments, useDevProperties, useDevTenants, useSession } from "@/lib/data/hooks";
@@ -54,6 +55,8 @@ function PropertiesList() {
         description={`${rows.length} de ${all.length} propiedades`}
         actions={admin && <Button onClick={() => setCreating(true)}><Plus /> Nueva propiedad</Button>}
       />
+
+      {admin && <MonthlyIncome leases={leases.data ?? []} className="mb-3 sm:max-w-md" />}
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-72">

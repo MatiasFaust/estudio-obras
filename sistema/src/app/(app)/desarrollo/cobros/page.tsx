@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
 import { LeaseDialog, RentPaymentDialog } from "@/components/dev/dialogs";
+import { MonthlyIncome } from "@/components/dev/monthly-income";
 import { useDevLeases, useDevPayments, useDevProperties, useDevTenants, useSession } from "@/lib/data/hooks";
 import { daysToEnd, isLeaseActive, leaseBalance, leaseLastDay } from "@/lib/dev";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -43,6 +44,7 @@ export default function RentsPage() {
         description="Contratos vigentes, quién está al día y quién debe"
         actions={<Button variant="outline" onClick={() => setCreating(true)}><FileSignature /> Nuevo contrato</Button>}
       />
+      <MonthlyIncome leases={leases.data ?? []} className="mb-3 sm:max-w-md" />
       <label className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
         <Checkbox checked={onlyOwed} onCheckedChange={setOnlyOwed} /> Solo los que deben
       </label>

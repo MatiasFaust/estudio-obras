@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AlertTriangle, ArrowRight, CalendarClock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/common/page-header";
+import { MonthlyIncome } from "@/components/dev/monthly-income";
 import { PropertyStatusDot } from "@/components/dev/property-status";
 import { PROPERTY_STATUS, PROPERTY_STATUS_ORDER } from "@/lib/constants";
 import { useDevLeases, useDevPayments, useDevProperties, useDevTenants, useSession } from "@/lib/data/hooks";
@@ -36,7 +37,6 @@ export default function DevDashboard() {
     .sort((a, b) => a.days - b.days);
   const byCurrency = (cur: Currency, rows: { amount: number; cur: Currency }[]) =>
     rows.filter((r) => r.cur === cur).reduce((a, r) => a + r.amount, 0);
-  const monthly = active.map((l) => ({ amount: l.rent_amount, cur: l.currency }));
   const owed = debts.map((d) => ({ amount: d.owed, cur: d.lease.currency }));
 
   return (
@@ -55,15 +55,7 @@ export default function DevDashboard() {
       {admin && (
         <>
           <div className="mb-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border bg-card p-3.5">
-              <div className="text-xs text-muted-foreground">Alquileres por mes ({active.length} contratos vigentes)</div>
-              <div className="mt-1 flex flex-wrap gap-x-4 text-2xl font-semibold tabular-nums tracking-tight">
-                {(["UYU", "USD"] as Currency[]).filter((c) => byCurrency(c, monthly) > 0).map((c) => (
-                  <span key={c}>{formatMoney(byCurrency(c, monthly), c)}</span>
-                ))}
-                {!monthly.length && <span>—</span>}
-              </div>
-            </div>
+            <MonthlyIncome leases={leases.data ?? []} />
             <Link href="/desarrollo/cobros" className="rounded-xl border bg-card p-3.5 transition-colors hover:border-foreground/20">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 Alquileres atrasados <span className="flex items-center gap-1">Ver cobros <ArrowRight className="size-3" /></span>
