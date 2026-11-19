@@ -14,7 +14,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
 import { SimpleSelect } from "@/components/common/simple-select";
 import { PermitFileDialog } from "@/components/permits/permit-file-dialog";
-import { OFFICE_OPTIONS, PERMIT_OFFICES, PERMIT_TASKS, TASK_OPTIONS } from "@/components/permits/permit-status";
+import { OFFICE_OPTIONS, PERMIT_OFFICES, PERMIT_TASKS, TASK_OPTIONS, TASK_ROW_COLOR } from "@/components/permits/permit-status";
 import { useAction, useBudgets, usePermitFiles, useRepo, useSession } from "@/lib/data/hooks";
 import { matches } from "@/lib/format";
 import { can } from "@/lib/permissions";
@@ -70,6 +70,11 @@ export default function PermitFilesPage() {
         </div>
         <SimpleSelect value={office} onChange={setOffice} options={OFFICE_FILTER} placeholder="Todas las oficinas" className="w-52" aria-label="Filtrar por oficina" />
         <SimpleSelect value={task} onChange={setTask} options={TASK_FILTER} placeholder="Todas las tareas" className="w-56" aria-label="Filtrar por tarea" />
+        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground sm:ml-auto" aria-label="Colores">
+          {Object.values(TASK_ROW_COLOR).map((c) => (
+            <span key={c.label} className="inline-flex items-center gap-1.5"><span className={cn("size-3 rounded-sm", c.swatch)} /> {c.label}</span>
+          ))}
+        </div>
       </div>
 
       {files.isLoading ? (
@@ -100,7 +105,7 @@ export default function PermitFilesPage() {
             </TableHeader>
             <TableBody>
               {rows.map((f) => (
-                <TableRow key={f.id}>
+                <TableRow key={f.id} data-color={f.task && TASK_ROW_COLOR[f.task] ? f.task : undefined} className={f.task ? TASK_ROW_COLOR[f.task]?.row : undefined}>
                   <TableCell className="font-medium tabular-nums">
                     {f.budget_id && f.budget_number
                       ? <Link href={`/pagos/${f.budget_id}`} className="hover:underline" title="Ver el presupuesto">{f.budget_number}</Link>

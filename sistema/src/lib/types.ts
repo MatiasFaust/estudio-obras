@@ -399,7 +399,7 @@ export type BudgetInput = Omit<Budget, "id" | "created_by" | "created_at" | "upd
 /** Oficina de la Intendencia donde está el expediente */
 export type PermitOffice = "edificaciones" | "planeamiento_urbano";
 /** Lo que falta hacer en el expediente */
-export type PermitTask = "grafico_veraz" | "levantar_observaciones" | "inspeccion_final";
+export type PermitTask = "grafico_veraz" | "levantar_observaciones" | "inspeccion_final" | "terminado";
 
 /** Expediente (trámite en la Intendencia), armado desde un presupuesto o a mano */
 export interface PermitFile {

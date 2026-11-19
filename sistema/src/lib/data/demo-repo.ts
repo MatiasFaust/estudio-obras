@@ -196,7 +196,7 @@ function checkBudget(b: Partial<Budget>) {
 /** Mismas validaciones que la base para los expedientes */
 function checkPermitFile(f: Partial<PermitFile>) {
   const offices = ["edificaciones", "planeamiento_urbano"];
-  const tasks = ["grafico_veraz", "levantar_observaciones", "inspeccion_final"];
+  const tasks = ["grafico_veraz", "levantar_observaciones", "inspeccion_final", "terminado"];
   if ((f.office && !offices.includes(f.office)) || (f.task && !tasks.includes(f.task)) || (f.file_number?.length ?? 0) > 40 || (f.client_name?.length ?? 0) > 160) {
     throw new RepoError("Algún dato no cumple las validaciones.");
   }

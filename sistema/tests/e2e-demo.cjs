@@ -899,6 +899,20 @@ async function logout(page) {
   await page.waitForFunction(() => !document.querySelector('[role=dialog]'), { timeout: 10000 }).catch(() => {});
   await sleep(600);
   check((await expRows()).some((t) => t.includes('21/0050/2025') && t.includes('Falta la firma del cliente')), 'expedientes: se editan (observaciones)');
+  // Colores como en la lista de Julia: rojo terminado (archivado), amarillo inspección final
+  const colorOf = (n) => page.$$eval('main tbody tr', (rows, num) => {
+    const r = rows.find((x) => x.checkVisibility() && x.innerText.includes(num));
+    return r ? { color: r.dataset.color ?? null, bg: getComputedStyle(r).backgroundColor } : null;
+  }, n);
+  const yellow = await colorOf('21/0050/2025');
+  await page.click('[aria-label="Cambiar tarea de 21/0101/2026"]');
+  await sleep(300);
+  await clickText(page, '[role=menuitemradio]', 'Terminado');
+  await sleep(800);
+  const red = await colorOf('21/0101/2026');
+  const plain = await colorOf('21/0300/2026');
+  check(yellow?.color === 'inspeccion_final' && red?.color === 'terminado' && plain?.color === null && red.bg !== yellow.bg && plain.bg !== red.bg,
+    `expedientes: rojo los terminados y amarillo los de inspección final (${JSON.stringify({ yellow, red, plain })})`);
   await page.click('[aria-label="Más opciones de 21/0300/2026"]');
   await sleep(300);
   await clickText(page, '[role=menuitem]', 'Eliminar');

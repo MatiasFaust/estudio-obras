@@ -243,7 +243,9 @@ await as(ADMIN, `update permit_files set office = 'edificaciones', task = 'inspe
 const pfRow = (await as(ADMIN, `select office, task from permit_files where id = '${pf.id}'`)).rows[0];
 check(pfRow.office === 'edificaciones' && pfRow.task === 'inspeccion_final', 'expedientes: se cambian oficina y tarea');
 check(!!(await fails_(ADMIN, `update permit_files set office = 'otra' where id = '${pf.id}'`)), 'expedientes: solo Edificaciones o Planeamiento Urbano');
-check(!!(await fails_(ADMIN, `update permit_files set task = 'otra' where id = '${pf.id}'`)), 'expedientes: solo las tres tareas');
+check(!!(await fails_(ADMIN, `update permit_files set task = 'otra' where id = '${pf.id}'`)), 'expedientes: solo las tareas de la lista');
+await as(ADMIN, `update permit_files set task = 'terminado' where id = '${pf.id}'`);
+check((await as(ADMIN, `select task from permit_files where id = '${pf.id}'`)).rows[0].task === 'terminado', 'expedientes: se puede marcar como terminado');
 check((await as(ADMIN, `insert into permit_files (client_name, file_number) values ('A mano', '21/0001/2025') returning id`)).rows.length === 1, 'expedientes: se puede cargar uno sin presupuesto');
 check((await as(ARQ, `select id from permit_files`)).rows.length === 0, 'expedientes: el arquitecto NO los ve');
 check(!!(await fails_(ARQ, `insert into permit_files (client_name) values ('x')`)), 'expedientes: el arquitecto NO los crea');
