@@ -3,9 +3,9 @@ import { convertAmount, formatMoney } from "../format";
 import { isLeaseActive, leaseLastDay } from "../dev";
 import { hasArq, isAdmin, isDevAdmin, isDevMember, isStaff } from "../permissions";
 import type {
-  Activity, Budget, Client, Currency, DevLease, DevProperty, DevTenant, FinanceInput, Note, Payment, Profile, Project, ProjectStatus, Stage,
+  Activity, Budget, Client, Currency, DevLease, DevProperty, DevTenant, FinanceInput, Note, Payment, PermitFile, Profile, Project, ProjectStatus, Stage,
 } from "../types";
-import { createBudgetDemoData, createDemoData, createDevDemoData, DEMO_PROFILES, type DemoDB } from "./demo-seed";
+import { createBudgetDemoData, createDemoData, createDevDemoData, createPermitDemoData, DEMO_PROFILES, type DemoDB } from "./demo-seed";
 import { RepoError, type Repo } from "./repo";
 
 // Modo demostración: los datos ficticios se guardan en el navegador (localStorage)
@@ -67,6 +67,11 @@ function load(): DemoDB {
         db.budgetSettings.logo ??= null;
         db.budgetSettings.responsibles ??= createBudgetDemoData().budgetSettings.responsibles;
         for (const b of db.budgets) b.responsible ??= "";
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+      }
+      // ...y antes de los expedientes
+      if (!db.permitFiles) {
+        db.permitFiles = createPermitDemoData();
         localStorage.setItem(DB_KEY, JSON.stringify(db));
       }
       return db;
@@ -184,6 +189,15 @@ function moveBudgetPayments(db: DemoDB, before: Budget, b: Budget) {
 function checkBudget(b: Partial<Budget>) {
   const neg = (n: number | null | undefined) => n !== null && n !== undefined && n < 0;
   if (neg(b.price) || neg(b.expenses_amount) || neg(b.wages_amount) || neg(b.wages_days) || (b.responsible?.length ?? 0) > 160) {
+    throw new RepoError("Algún dato no cumple las validaciones.");
+  }
+}
+
+/** Mismas validaciones que la base para los expedientes */
+function checkPermitFile(f: Partial<PermitFile>) {
+  const offices = ["edificaciones", "planeamiento_urbano"];
+  const tasks = ["grafico_veraz", "levantar_observaciones", "inspeccion_final"];
+  if ((f.office && !offices.includes(f.office)) || (f.task && !tasks.includes(f.task)) || (f.file_number?.length ?? 0) > 40 || (f.client_name?.length ?? 0) > 160) {
     throw new RepoError("Algún dato no cumple las validaciones.");
   }
 }
@@ -718,6 +732,8 @@ export function createDemoRepo(): Repo {
       if (!b) throw new RepoError("El presupuesto no existe.");
       db.budgets = db.budgets.filter((x) => x.id !== id);
       db.payments = db.payments.filter((x) => x.budget_id !== id);
+      // Sus expedientes quedan, sin el vínculo (como en la base)
+      for (const f of db.permitFiles) if (f.budget_id === id) f.budget_id = null;
       log(db, user, { entity_type: "payment", entity_id: id, project_id: b.project_id, action: "deleted", summary: `eliminó ${budgetLabel(b)} (${budgetPlace(db, b)})` });
       save(db);
     },
@@ -731,6 +747,42 @@ export function createDemoRepo(): Repo {
       const user = requireUser(db);
       if (!isAdmin(user)) deny();
       db.budgetSettings = { ...input, updated_at: now() };
+      save(db);
+    },
+
+    // ---------------- Expedientes (solo administradores) ----------------
+    async listPermitFiles() {
+      const db = load();
+      const user = requireUser(db);
+      return isAdmin(user) ? [...db.permitFiles].sort((a, b) => b.created_at.localeCompare(a.created_at)) : [];
+    },
+    async createPermitFile(input) {
+      const db = load();
+      const user = requireUser(db);
+      if (!isAdmin(user)) deny();
+      checkPermitFile(input);
+      const f: PermitFile = { ...input, id: uid(), created_by: user.id, created_at: now(), updated_at: now() };
+      db.permitFiles.push(f);
+      save(db);
+      return f;
+    },
+    async updatePermitFile(id, input) {
+      const db = load();
+      const user = requireUser(db);
+      if (!isAdmin(user)) deny();
+      const f = db.permitFiles.find((x) => x.id === id);
+      if (!f) throw new RepoError("El expediente no existe.");
+      const next = { ...f, ...input, updated_at: now() };
+      checkPermitFile(next);
+      Object.assign(f, next);
+      save(db);
+    },
+    async deletePermitFile(id) {
+      const db = load();
+      const user = requireUser(db);
+      if (!isAdmin(user)) deny();
+      if (!db.permitFiles.some((x) => x.id === id)) throw new RepoError("El expediente no existe.");
+      db.permitFiles = db.permitFiles.filter((x) => x.id !== id);
       save(db);
     },
 

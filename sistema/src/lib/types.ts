@@ -395,4 +395,29 @@ export interface Budget {
 }
 
 export type BudgetInput = Omit<Budget, "id" | "created_by" | "created_at" | "updated_at">;
+
+/** Oficina de la Intendencia donde está el expediente */
+export type PermitOffice = "edificaciones" | "planeamiento_urbano";
+/** Lo que falta hacer en el expediente */
+export type PermitTask = "grafico_veraz" | "levantar_observaciones" | "inspeccion_final";
+
+/** Expediente (trámite en la Intendencia), armado desde un presupuesto o a mano */
+export interface PermitFile {
+  id: string;
+  budget_id: string | null;
+  budget_number: string;
+  padron: string;
+  client_name: string;
+  service: string;
+  /** Número de expediente de la Intendencia, ej.: 21/0224/2026 */
+  file_number: string;
+  office: PermitOffice | null;
+  task: PermitTask | null;
+  notes: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PermitFileInput = Omit<PermitFile, "id" | "created_by" | "created_at" | "updated_at">;
 export type BudgetSettingsInput = Omit<BudgetSettings, "updated_at">;

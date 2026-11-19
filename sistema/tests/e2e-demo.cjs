@@ -850,6 +850,65 @@ async function logout(page) {
   await page.waitForFunction(() => location.pathname === '/pagos/b1', { timeout: 10000 }).catch(() => {});
   check(await page.evaluate(() => location.pathname === '/pagos/b1'), 'dirección vieja del presupuesto redirige a Presupuestos');
 
+  // --- Expedientes: se arman desde un presupuesto; oficina y tarea se cambian en la tabla
+  const navLabels = await page.$$eval('nav[aria-label="Navegación principal"] a', (as) => as.filter((a) => a.checkVisibility()).map((a) => a.textContent.trim()));
+  check(navLabels.slice(0, 5).join('|') === 'Panel|Presupuestos|Expedientes|Obras|Mapa de obras', `menú en el orden pedido (${navLabels.join(', ')})`);
+  const expRows = () => page.$$eval('main tbody tr', (rows) => rows.filter((r) => r.checkVisibility()).map((r) => r.innerText.replace(/\s+/g, ' ')));
+  await page.goto(`${BASE}/expedientes`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector('main tbody tr', { timeout: 10000 });
+  const exp0 = await expRows();
+  check(exp0.length === 2 && exp0.some((t) => t.includes('21/0101/2026')) && (await page.$eval('main', (e) => e.textContent)).includes('Estado'), 'expedientes: lista con N.º, padrón, cliente, servicio, expediente y estado');
+  await clickText(page, 'main button', 'Expediente');
+  await page.waitForSelector('[aria-label="Buscar presupuesto"]', { timeout: 5000 });
+  await page.type('[aria-label="Buscar presupuesto"]', '3050');
+  await sleep(300);
+  await clickText(page, '[aria-label="Presupuestos encontrados"] button', '3050');
+  await sleep(300);
+  const filledExp = await page.evaluate(() => ['#ex-number', '#ex-padron', '#ex-client', '#ex-service'].map((s) => document.querySelector(s).value));
+  check(filledExp.join('|') === '3050|1234|Ana Prueba|Regularización de vivienda', `expedientes: al elegir el presupuesto se completan sus datos (${filledExp.join(' | ')})`);
+  await page.type('#ex-file', '21/0300/2026');
+  await clickText(page, '[role=dialog] button[type=submit]', 'Crear expediente');
+  await page.waitForFunction(() => !document.querySelector('[role=dialog]'), { timeout: 10000 }).catch(() => {});
+  await sleep(600);
+  await page.click('[aria-label="Cambiar oficina de 21/0300/2026"]');
+  await sleep(300);
+  await clickText(page, '[role=menuitemradio]', 'Planeamiento Urbano');
+  await sleep(700);
+  await page.click('[aria-label="Cambiar tarea de 21/0300/2026"]');
+  await sleep(300);
+  await clickText(page, '[role=menuitemradio]', 'Levantar observaciones');
+  await sleep(700);
+  await page.reload({ waitUntil: 'networkidle2' });
+  await page.waitForSelector('main tbody tr', { timeout: 10000 });
+  const exp1 = await expRows();
+  const rowNew = exp1.find((t) => t.includes('21/0300/2026')) ?? '';
+  check(rowNew.includes('3050') && rowNew.includes('Ana Prueba') && rowNew.includes('Planeamiento Urbano') && rowNew.includes('Levantar observaciones'), `expedientes: oficina y tarea se eligen en la tabla y quedan guardadas (${rowNew})`);
+  check(exp1[0]?.startsWith('3050'), 'expedientes: ordenados por número, el más alto arriba');
+  await pick('Filtrar por oficina', 'Edificaciones');
+  const expOffice = await expRows();
+  check(expOffice.length === 1 && expOffice[0].includes('21/0050/2025'), `expedientes: filtro por oficina (${expOffice.length})`);
+  await pick('Filtrar por oficina', 'Todas las oficinas');
+  // Editar uno cargado a mano y eliminar otro (el presupuesto no se toca)
+  await page.click('[aria-label="Más opciones de 21/0050/2025"]');
+  await sleep(300);
+  await clickText(page, '[role=menuitem]', 'Editar');
+  await page.waitForSelector('#ex-notes', { timeout: 5000 });
+  await page.click('#ex-notes', { clickCount: 3 });
+  await page.type('#ex-notes', 'Falta la firma del cliente');
+  await clickText(page, '[role=dialog] button[type=submit]', 'Guardar');
+  await page.waitForFunction(() => !document.querySelector('[role=dialog]'), { timeout: 10000 }).catch(() => {});
+  await sleep(600);
+  check((await expRows()).some((t) => t.includes('21/0050/2025') && t.includes('Falta la firma del cliente')), 'expedientes: se editan (observaciones)');
+  await page.click('[aria-label="Más opciones de 21/0300/2026"]');
+  await sleep(300);
+  await clickText(page, '[role=menuitem]', 'Eliminar');
+  await sleep(400);
+  await clickText(page, '[role=alertdialog] button', 'Eliminar');
+  await sleep(800);
+  const afterDel = await expRows();
+  const budget3050 = await page.evaluate(() => JSON.parse(localStorage.getItem('estudio-demo-db-v1')).budgets.some((b) => b.number === '3050'));
+  check(afterDel.length === 2 && !afterDel.some((t) => t.includes('21/0300/2026')) && budget3050, 'expedientes: se eliminan y el presupuesto sigue');
+
   // --- Estudio de desarrollo (administradora de los dos estudios)
   check(!!(await page.$('nav[aria-label="Área"]')), 'botones de los dos estudios visibles arriba');
   await page.goto(`${BASE}/desarrollo`, { waitUntil: 'networkidle2' });
@@ -943,6 +1002,10 @@ async function logout(page) {
   await page.goto(`${BASE}/pagos/plantilla`, { waitUntil: 'networkidle2' });
   await sleep(800);
   check((await page.$eval('main', (e) => e.textContent)).includes('Sin permiso'), 'arquitecto no accede a la plantilla de presupuestos');
+  await page.goto(`${BASE}/expedientes`, { waitUntil: 'networkidle2' });
+  await sleep(800);
+  const arqNav = await page.$$eval('nav[aria-label="Navegación principal"] a', (as) => as.map((a) => a.textContent.trim()));
+  check((await page.$eval('main', (e) => e.textContent)).includes('Sin permiso') && !arqNav.includes('Expedientes'), 'arquitecto no ve Expedientes');
   await page.goto(`${BASE}/obras/p1`, { waitUntil: 'networkidle2' });
   await sleep(1500);
   await page.screenshot({ path: path.join(OUT, 's6-movil-obra.png') });

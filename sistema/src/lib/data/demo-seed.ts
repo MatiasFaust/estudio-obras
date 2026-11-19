@@ -1,5 +1,5 @@
 import type {
-  Activity, Budget, BudgetSettings, Client, DevLease, DevProperty, DevRentPayment, DevTenant, Finance, Note, NoteCategory, Payment, Profile, Project, ProjectStatus, ProjectType, Stage,
+  Activity, Budget, BudgetSettings, Client, DevLease, DevProperty, DevRentPayment, DevTenant, Finance, Note, NoteCategory, Payment, PermitFile, Profile, Project, ProjectStatus, ProjectType, Stage,
 } from "../types";
 
 // DATOS FICTICIOS para el modo demostración. Ninguna persona, cliente u obra es real.
@@ -20,6 +20,22 @@ export interface DemoDB {
   devPayments: DevRentPayment[];
   budgets: Budget[];
   budgetSettings: BudgetSettings;
+  permitFiles: PermitFile[];
+}
+
+/** Expedientes ficticios: uno armado desde el presupuesto 2094 y uno viejo cargado a mano */
+export function createPermitDemoData(): PermitFile[] {
+  const at = new Date().toISOString();
+  return [
+    {
+      id: "e1", budget_id: "b1", budget_number: "2094", padron: "0001", client_name: "Familia Ejemplo Acosta", service: "Proyecto de vivienda",
+      file_number: "21/0101/2026", office: "planeamiento_urbano", task: "grafico_veraz", notes: "", created_by: DEMO_USERS.admin, created_at: at, updated_at: at,
+    },
+    {
+      id: "e2", budget_id: null, budget_number: "", padron: "0002", client_name: "Cliente Viejo Demo", service: "Regularización",
+      file_number: "21/0050/2025", office: "edificaciones", task: "inspeccion_final", notes: "Cargado a mano (demo).", created_by: DEMO_USERS.admin, created_at: at, updated_at: at,
+    },
+  ];
 }
 
 export const DEMO_USERS = {
@@ -279,6 +295,7 @@ export function createDemoData(): DemoDB {
     ],
     ...createDevDemoData(),
     ...createBudgetDemoData(),
+    permitFiles: createPermitDemoData(),
   };
 }
 

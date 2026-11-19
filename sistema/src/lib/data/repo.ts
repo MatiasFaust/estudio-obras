@@ -1,6 +1,6 @@
 import type {
   Activity, Budget, BudgetInput, BudgetSettings, BudgetSettingsInput, Client, ClientInput, DevLease, DevLeaseInput, DevProperty, DevPropertyInput, DevRentPayment,
-  DevRentPaymentInput, DevTenant, DevTenantInput, Finance, FinanceInput, Note, NoteInput, Payment, PaymentInput, Profile,
+  DevRentPaymentInput, DevTenant, DevTenantInput, Finance, FinanceInput, Note, NoteInput, Payment, PaymentInput, PermitFile, PermitFileInput, Profile,
   Project, ProjectInput, Stage, StageInput,
 } from "../types";
 
@@ -77,6 +77,12 @@ export interface Repo {
   deleteBudget(id: string): Promise<void>;
   getBudgetSettings(): Promise<BudgetSettings | null>;
   saveBudgetSettings(input: BudgetSettingsInput): Promise<void>;
+
+  // Expedientes (solo administradores)
+  listPermitFiles(): Promise<PermitFile[]>;
+  createPermitFile(input: PermitFileInput): Promise<PermitFile>;
+  updatePermitFile(id: string, input: Partial<PermitFileInput>): Promise<void>;
+  deletePermitFile(id: string): Promise<void>;
 
   // Estudio de desarrollo. Propiedades: todo el equipo de desarrollo las ve.
   // Inquilinos, contratos y cobros: solo administradores de desarrollo.

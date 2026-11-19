@@ -1,7 +1,7 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { getSupabase } from "../supabase/client";
 import type {
-  Activity, Budget, BudgetSettings, Client, DevLease, DevProperty, DevRentPayment, DevTenant, Finance, Note, Payment, Profile, Project, Stage,
+  Activity, Budget, BudgetSettings, Client, DevLease, DevProperty, DevRentPayment, DevTenant, Finance, Note, Payment, PermitFile, Profile, Project, Stage,
 } from "../types";
 import { RepoError, type Repo } from "./repo";
 
@@ -243,6 +243,19 @@ export function createSupabaseRepo(): Repo {
       await run(sb.from("budget_settings").update(input).eq("id", true).select().single());
     },
 
+    // Expedientes
+    listPermitFiles: async () =>
+      (await run(sb.from("permit_files").select("*").order("created_at", { ascending: false }))) as PermitFile[],
+    async createPermitFile(input) {
+      return (await run(sb.from("permit_files").insert(input).select().single())) as PermitFile;
+    },
+    async updatePermitFile(id, input) {
+      await run(sb.from("permit_files").update(input).eq("id", id).select().single());
+    },
+    async deletePermitFile(id) {
+      await run(sb.from("permit_files").delete().eq("id", id).select().single());
+    },
+
     // Estudio de desarrollo (los numeric de PostgreSQL llegan como texto)
     listDevProperties: async () =>
       ((await run(sb.from("dev_properties").select("*").order("name"))) as DevProperty[]).map((p) => ({
@@ -304,7 +317,7 @@ export function createSupabaseRepo(): Repo {
 
     subscribe(onChange) {
       const tables = ["clients", "projects", "project_members", "project_stages", "notes", "activity_log", "project_finances", "payments",
-        "dev_properties", "dev_tenants", "dev_leases", "dev_rent_payments", "budgets", "budget_settings"];
+        "dev_properties", "dev_tenants", "dev_leases", "dev_rent_payments", "budgets", "budget_settings", "permit_files"];
       let channel = sb.channel("cambios-estudio");
       for (const table of tables) {
         channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, () => onChange(table));

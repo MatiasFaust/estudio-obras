@@ -64,6 +64,11 @@ export function useBudgetSettings(enabled: boolean) {
   return useQuery({ queryKey: ["budget_settings"], queryFn: () => repo.getBudgetSettings(), enabled });
 }
 
+export function usePermitFiles(enabled: boolean) {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["permit_files"], queryFn: () => repo.listPermitFiles(), enabled });
+}
+
 // ---- Estudio de desarrollo (los datos de administración se piden solo si corresponde) ----
 
 export function useDevProperties() {

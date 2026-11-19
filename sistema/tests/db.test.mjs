@@ -234,6 +234,24 @@ await as(ADMIN, `update budgets set responsible = 'Roni y Jimena' where id = '${
 check((await as(ADMIN, `select responsible from budgets where id = '${budget.id}'`)).rows[0].responsible === 'Roni y Jimena', 'presupuesto: guarda los responsables');
 check((await as(ADMIN, `select responsible from budgets where number = '2096'`)).rows[0].responsible === '', 'presupuesto: sin responsables queda vacío');
 check(!!(await fails_(ADMIN, `update budgets set responsible = repeat('x', 200) where id = '${budget.id}'`)), 'presupuesto: rechaza responsables demasiado largos');
+
+// Expedientes: desde un presupuesto o a mano; solo administradores
+const pf = (await as(ADMIN, `insert into permit_files (budget_id, budget_number, padron, client_name, service, file_number, office, task)
+  values ('${budget.id}', '2094', '1520', 'Cliente SQL', 'Reforma', '21/0224/2026', 'planeamiento_urbano', 'grafico_veraz') returning id, created_by`)).rows[0];
+check(pf.created_by === ADMIN, 'expedientes: el administrador crea uno desde un presupuesto');
+await as(ADMIN, `update permit_files set office = 'edificaciones', task = 'inspeccion_final' where id = '${pf.id}'`);
+const pfRow = (await as(ADMIN, `select office, task from permit_files where id = '${pf.id}'`)).rows[0];
+check(pfRow.office === 'edificaciones' && pfRow.task === 'inspeccion_final', 'expedientes: se cambian oficina y tarea');
+check(!!(await fails_(ADMIN, `update permit_files set office = 'otra' where id = '${pf.id}'`)), 'expedientes: solo Edificaciones o Planeamiento Urbano');
+check(!!(await fails_(ADMIN, `update permit_files set task = 'otra' where id = '${pf.id}'`)), 'expedientes: solo las tres tareas');
+check((await as(ADMIN, `insert into permit_files (client_name, file_number) values ('A mano', '21/0001/2025') returning id`)).rows.length === 1, 'expedientes: se puede cargar uno sin presupuesto');
+check((await as(ARQ, `select id from permit_files`)).rows.length === 0, 'expedientes: el arquitecto NO los ve');
+check(!!(await fails_(ARQ, `insert into permit_files (client_name) values ('x')`)), 'expedientes: el arquitecto NO los crea');
+const tmpBudget = (await as(ADMIN, `insert into budgets (kind, number, price) values ('manual', '2199', 1000) returning id`)).rows[0].id;
+const tmpPf = (await as(ADMIN, `insert into permit_files (budget_id, budget_number, client_name) values ('${tmpBudget}', '2199', 'Se queda') returning id`)).rows[0].id;
+await as(ADMIN, `delete from budgets where id = '${tmpBudget}'`);
+const kept = (await as(ADMIN, `select budget_id, budget_number from permit_files where id = '${tmpPf}'`)).rows[0];
+check(kept && kept.budget_id === null && kept.budget_number === '2199', 'expedientes: si se borra el presupuesto, el expediente queda con sus datos');
 await as(ADMIN, `update budget_settings set calc_types = '[{"name":"Reforma","fee_per_m2":1200,"wages_per_m2":1.5,"build_cost_per_m2":null}]', wage_value = 2200, expenses_fixed = 15000`);
 const calc = (await as(ADMIN, `select calc_types, wage_value::float as w, iva_rate::float as iva from budget_settings`)).rows[0];
 check(calc.calc_types[0].name === 'Reforma' && calc.w === 2200 && calc.iva === 22, 'calculadora: valores guardados en la plantilla (IVA 22% por defecto)');

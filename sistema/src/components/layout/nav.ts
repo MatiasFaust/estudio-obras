@@ -1,5 +1,5 @@
 import {
-  Banknote, Building2, Home, KeyRound, LayoutDashboard, Lightbulb, Map, Users, type LucideIcon,
+  Banknote, Building2, FolderOpen, Home, KeyRound, LayoutDashboard, Lightbulb, Map, Users, type LucideIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -29,12 +29,14 @@ export { areaChosen, CHOOSE_AREA, markAreaChosen } from "@/lib/areas";
 export const areaOf = (pathname: string): Area =>
   pathname === "/desarrollo" || pathname.startsWith("/desarrollo/") ? "desarrollo" : "arquitectura";
 
+// En el orden que pidió el estudio: Panel, Presupuestos, Expedientes, Obras (y su mapa), Clientes
 export const NAV: NavItem[] = [
   { href: "/", label: "Panel", icon: LayoutDashboard },
-  { href: "/mapa", label: "Mapa de obras", icon: Map },
-  { href: "/obras", label: "Obras", icon: Building2 },
-  { href: "/clientes", label: "Clientes", icon: Users },
   { href: "/pagos", label: "Presupuestos", icon: Banknote, adminOnly: true },
+  { href: "/expedientes", label: "Expedientes", icon: FolderOpen, adminOnly: true },
+  { href: "/obras", label: "Obras", icon: Building2 },
+  { href: "/mapa", label: "Mapa de obras", icon: Map },
+  { href: "/clientes", label: "Clientes", icon: Users },
   { href: "/ideas", label: "Ideas del estudio", icon: Lightbulb },
 ];
 
